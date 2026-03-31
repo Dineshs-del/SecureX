@@ -1,0 +1,208 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View, Text, StyleSheet, TouchableOpacity, Animated, Dimensions,
+  ScrollView, Image, Linking, Alert, Modal, Platform,
+} from 'react-native';
+import Clipboard from '@react-native-clipboard/clipboard';
+import { T, getCategoryColor } from '../theme/tokens';
+
+interface Props {
+  credential: any;
+  onPressIcon: () => void;
+  onCopy: (text: string, label: string) => void;
+}
+
+// Simple deterministic TOTP generator for UI demo
+const getFakeTOTP = (id: string): string => {
+  const n = id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  const time = Math.floor(Date.now() / 30000);
+  const code = (n * time) % 1000000;
+  return String(code).padStart(6, '0');
+};
+
+const getFaviconUrl = (url: string) => {
+  try {
+    const domain = url.replace('https://', '').replace('http://', '').split('/')[0];
+    return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+  } catch {
+    return null;
+  }
+};
+
+export const CredentialCard: React.FC<Props> = ({
+  credential, onPressIcon, onCopy,
+}) => {
+  const [seconds, setSeconds] = useState(30 - (Math.floor(Date.now() / 1000) % 30));
+  const catColor = getCategoryColor(credential.category);
+  const initial  = (credential.name || '?').charAt(0).toUpperCase();
+  const favicon  = getFaviconUrl(credential.url || '');
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSeconds(30 - (Math.floor(Date.now() / 1000) % 30));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const totp = credential.totp ? getFakeTOTP(credential.id) : null;
+
+  return (
+    <View style={s.card}>
+      <View style={s.topHL} />
+      
+      {/* ── LEFT: Brand Icon ── */}
+      <TouchableOpacity 
+        style={[s.logoContainer, { shadowColor: catColor }]} 
+        onPress={onPressIcon}
+        activeOpacity={0.8}
+      >
+        <View style={[s.logoInner, { backgroundColor: catColor + '18' }]}>
+          {favicon && !imgError ? (
+            <Image 
+              source={{ uri: favicon }} 
+              style={s.favicon} 
+              onError={() => setImgError(true)} 
+            />
+          ) : (
+            <Text style={[s.logoLetter, { color: catColor }]}>{initial}</Text>
+          )}
+        </View>
+      </TouchableOpacity>
+
+      {/* ── CENTER: Info ── */}
+      <View style={s.info}>
+        <Text style={s.name} numberOfLines={1}>{credential.name}</Text>
+        <Text style={s.username} numberOfLines={1}>{credential.username}</Text>
+        
+        {/* Strength Badge */}
+        <View style={s.badgeRow}>
+          {credential.strength !== 'strong' ? (
+            <View style={s.strengthBadge}>
+              <Text style={s.strengthText}>{credential.strength === 'weak' ? 'WEAK' : 'FAIR'}</Text>
+            </View>
+          ) : null}
+
+          {credential.breached ? (
+            <View style={s.breachBadge}>
+              <Text style={s.breachText}>BREACHED</Text>
+            </View>
+          ) : null}
+        </View>
+      </View>
+
+      {/* ── RIGHT: Actions ── */}
+      <View style={s.right}>
+        {/* Password Row */}
+        <View style={s.passRow}>
+          <Text style={s.dots}>●●●●●●</Text>
+          <TouchableOpacity onPress={() => onCopy(credential.password, 'Password')} hitSlop={12}>
+            <Text style={s.copyIcon}>📋</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* TOTP Row */}
+        {totp ? (
+          <View style={s.totpRow}>
+            <Text style={s.totpCode}>{totp}</Text>
+            <View style={s.ringWrap}>
+              <View style={[s.ringBase, { borderColor: T.cyanA12 }]} />
+              <View style={[s.ringActive, { 
+                borderColor: T.cyan,
+                borderRightColor: 'transparent',
+                borderBottomColor: 'transparent',
+                transform: [{ rotate: `${(seconds / 30) * 360}deg` }]
+              }]} />
+            </View>
+          </View>
+        ) : null}
+
+        {/* Category Pill */}
+        <View style={[s.catPill, { backgroundColor: catColor + '18' }]}>
+          <Text style={[s.catText, { color: catColor }]}>{credential.category}</Text>
+        </View>
+      </View>
+    </View>
+  );
+};
+
+const s = StyleSheet.create({
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: T.glass,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: T.border,
+    overflow: 'hidden',
+    marginHorizontal: 20,
+  },
+  topHL: {
+    position: 'absolute', top: 0, left: 0, right: 0, height: 1,
+    backgroundColor: T.borderTop,
+  },
+
+  // Left
+  logoContainer: {
+    width: 46, height: 46,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  logoInner: {
+    width: 46, height: 46,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  favicon: { width: 32, height: 32, borderRadius: 6 },
+  logoLetter: { fontSize: 20, fontWeight: '800' },
+
+  // Center
+  info: { flex: 1, paddingHorizontal: 16 },
+  name: { fontFamily: 'Syne', fontWeight: '600', fontSize: 15, color: '#FFFFFF' },
+  username: { ...T.fontMono, fontSize: 12, color: T.muted, marginTop: 4 },
+
+  badgeRow: { flexDirection: 'row', gap: 6, marginTop: 6 },
+  strengthBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(245,166,35,0.12)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1, borderColor: 'rgba(245,166,35,0.25)',
+  },
+  strengthText: { ...T.fontMono, fontSize: 9, fontWeight: '800', color: '#f5a623' },
+
+  breachBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: T.dangerA14,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1, borderColor: 'rgba(255,77,109,0.25)',
+  },
+  breachText: { ...T.fontMono, fontSize: 9, fontWeight: '800', color: T.danger },
+
+  // Right
+  right: { alignItems: 'flex-end' },
+  passRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  dots: { ...T.fontMono, fontSize: 10, color: T.muted, letterSpacing: 1, marginRight: 8 },
+  copyIcon: { fontSize: 14, color: T.muted },
+
+  totpRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  totpCode: { ...T.fontMono, fontSize: 13, color: T.cyan, fontWeight: '700', marginRight: 6 },
+  ringWrap: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center' },
+  ringBase: { position: 'absolute', width: 20, height: 20, borderRadius: 10, borderWidth: 2 },
+  ringActive: { position: 'absolute', width: 20, height: 20, borderRadius: 10, borderWidth: 2 },
+
+  catPill: {
+    paddingHorizontal: 8, paddingVertical: 2,
+    borderRadius: 4,
+  },
+  catText: { ...T.fontMono, fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
+});

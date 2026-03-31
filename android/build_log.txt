@@ -1,0 +1,64 @@
+Initialized native services in: C:\Users\ELCOT\.gradle\native
+Initialized jansi services in: C:\Users\ELCOT\.gradle\native
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.0.0/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Starting process 'Gradle build daemon'. Working directory: C:\Users\ELCOT\.gradle\daemon\9.0.0 Command: C:\Program Files\Java\jdk-17\bin\java.exe --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED --add-opens=java.base/java.nio.charset=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.xml/javax.xml.namespace=ALL-UNNAMED -XX:MaxMetaspaceSize=512m -Xmx2048m -Dfile.encoding=windows-1252 -Duser.country=IN -Duser.language=en -Duser.variant -cp C:\Users\ELCOT\.gradle\wrapper\dists\gradle-9.0.0-bin\d6wjpkvcgsg3oed0qlfss3wgl\gradle-9.0.0\lib\gradle-daemon-main-9.0.0.jar -javaagent:C:\Users\ELCOT\.gradle\wrapper\dists\gradle-9.0.0-bin\d6wjpkvcgsg3oed0qlfss3wgl\gradle-9.0.0\lib\agents\gradle-instrumentation-agent-9.0.0.jar org.gradle.launcher.daemon.bootstrap.GradleDaemon 9.0.0
+Successfully started process 'Gradle build daemon'
+An attempt to start the daemon took 2.582 secs.
+The client will now receive all logging from the daemon (pid: 22988). The daemon log file: C:\Users\ELCOT\.gradle\daemon\9.0.0\daemon-22988.out.log
+Daemon will be stopped at the end of the build 
+Using 8 worker leases.
+Received JVM installation metadata from 'C:\Program Files\Java\jdk-17': {JAVA_HOME=C:\Program Files\Java\jdk-17, JAVA_VERSION=17.0.12, JAVA_VENDOR=Oracle Corporation, RUNTIME_NAME=Java(TM) SE Runtime Environment, RUNTIME_VERSION=17.0.12+8-LTS-286, VM_NAME=Java HotSpot(TM) 64-Bit Server VM, VM_VERSION=17.0.12+8-LTS-286, VM_VENDOR=Oracle Corporation, OS_ARCH=amd64}
+Watching the file system is configured to be enabled if available
+Now considering [D:\Dinesh\AiPasswordManager\android] as hierarchies to watch
+File system watching is active
+Starting Build
+Now considering [D:\Dinesh\AiPasswordManager\node_modules\@react-native\gradle-plugin, D:\Dinesh\AiPasswordManager\android] as hierarchies to watch
+Resolved plugin [id: 'org.gradle.toolchains.foojay-resolver-convention', version: '0.5.0']
+Now considering [D:\Dinesh\AiPasswordManager\node_modules\expo-modules-autolinking\android\expo-gradle-plugin, D:\Dinesh\AiPasswordManager\node_modules\@react-native\gradle-plugin, D:\Dinesh\AiPasswordManager\android] as hierarchies to watch
+
+> Configure project :gradle-plugin
+Evaluating project ':gradle-plugin' using build file 'D:\Dinesh\AiPasswordManager\node_modules\@react-native\gradle-plugin\build.gradle.kts'.
+Resolved plugin [id: 'org.jetbrains.kotlin.jvm', version: '2.1.20', apply: false]
+Resolved plugin [id: 'com.ncorti.ktfmt.gradle', version: '0.22.0']
+
+> Configure project :gradle-plugin:react-native-gradle-plugin
+Evaluating project ':gradle-plugin:react-native-gradle-plugin' using build file 'D:\Dinesh\AiPasswordManager\node_modules\@react-native\gradle-plugin\react-native-gradle-plugin\build.gradle.kts'.
+Resolved plugin [id: 'org.jetbrains.kotlin.jvm', version: '2.1.20']
+Resolved plugin [id: 'com.ncorti.ktfmt.gradle', version: '0.22.0']
+Resolved plugin [id: 'java-gradle-plugin']
+Build e00cd3aa-e129-49aa-bc1b-e8fa2c52f85b is started
+Using Kotlin Gradle Plugin gradle85 variant
+kotlin scripting plugin: created the scripting discovery configuration: kotlinScriptDef
+kotlin scripting plugin: created the scripting discovery configuration: testKotlinScriptDef
+
+> Configure project :gradle-plugin:settings-plugin
+Evaluating project ':gradle-plugin:settings-plugin' using build file 'D:\Dinesh\AiPasswordManager\node_modules\@react-native\gradle-plugin\settings-plugin\build.gradle.kts'.
+Resolved plugin [id: 'org.jetbrains.kotlin.jvm', version: '2.1.20']
+Resolved plugin [id: 'com.ncorti.ktfmt.gradle', version: '0.22.0']
+Resolved plugin [id: 'java-gradle-plugin']
+Using Kotlin Gradle Plugin gradle85 variant
+kotlin scripting plugin: created the scripting discovery configuration: kotlinScriptDef
+kotlin scripting plugin: created the scripting discovery configuration: testKotlinScriptDef
+
+> Configure project :gradle-plugin:shared
+Evaluating project ':gradle-plugin:shared' using build file 'D:\Dinesh\AiPasswordManager\node_modules\@react-native\gradle-plugin\shared\build.gradle.kts'.
+Resolved plugin [id: 'org.jetbrains.kotlin.jvm', version: '2.1.20']
+Resolved plugin [id: 'com.ncorti.ktfmt.gradle', version: '0.22.0']
+Using Kotlin Gradle Plugin gradle85 variant
+kotlin scripting plugin: created the scripting discovery configuration: kotlinScriptDef
+kotlin scripting plugin: created the scripting discovery configuration: testKotlinScriptDef
+
+> Configure project :gradle-plugin:shared-testutil
+Evaluating project ':gradle-plugin:shared-testutil' using build file 'D:\Dinesh\AiPasswordManager\node_modules\@react-native\gradle-plugin\shared-testutil\build.gradle.kts'.
+Resolved plugin [id: 'org.jetbrains.kotlin.jvm', version: '2.1.20']
+Resolved plugin [id: 'com.ncorti.ktfmt.gradle', version: '0.22.0']
+Using Kotlin Gradle Plugin gradle85 variant
+kotlin scripting plugin: created the scripting discovery configuration: kotlinScriptDef
+kotlin scripting plugin: created the scripting discovery configuration: testKotlinScriptDef
+Resolved plugin [id: 'com.facebook.react.settings']
+
+> Configure project :expo-gradle-plugin
+Evaluating project ':expo-gradle-plugin' using build file 'D:\Dinesh\AiPasswordManager\node_modules\expo-modules-autolinking\android\expo-gradle-plugin\build.gradle.kts'.
+Resolved plugin [id: 'org.jetbrains.kotlin.jvm', version: '2.1.20', apply: false]
+Resolved plugin [id: 'java-gradle-plugin']
+Terminate batch job (Y/N)? 
