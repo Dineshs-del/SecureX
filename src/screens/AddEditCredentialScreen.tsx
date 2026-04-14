@@ -136,9 +136,9 @@ export const AddEditCredentialScreen: React.FC = () => {
     setIsSaving(true);
     try {
       if (isEditing) {
-        await updateCredential(editId, { name: websiteName, url, username, password, notes, category, totp: totpSecret });
+        await updateCredential(editId, { name: websiteName, url, username, password, notes, category, totp: totpSecret, strength: getPasswordStrength(password) });
       } else {
-        await addCredential({ name: websiteName, url, username, password, notes, category, totp: totpSecret, favicon: '' });
+        await addCredential({ name: websiteName, url, username, password, notes, category, totp: totpSecret, favicon: '', strength: getPasswordStrength(password) });
       }
       toastRef.current?.show('✓ Saved to vault');
       setTimeout(() => {

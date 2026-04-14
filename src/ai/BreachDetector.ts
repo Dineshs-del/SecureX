@@ -1,4 +1,4 @@
-import { CryptoService } from '../crypto/CryptoService';
+import { CryptoService } from '../theme/crypto/CryptoService';
 
 /**
  * BreachDetector checks passwords against HaveIBeenPwned

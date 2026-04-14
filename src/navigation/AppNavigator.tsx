@@ -19,6 +19,9 @@ import { AIPasswordGeneratorScreen } from '../screens/AIPasswordGeneratorScreen'
 import { ChangePasswordScreen } from '../screens/ChangePasswordScreen';
 import { UserGuideScreen } from '../screens/UserGuideScreen';
 import { AutofillSetupScreen } from '../screens/AutofillSetupScreen';
+import { BankCardScreen } from '../screens/BankCardScreen';
+import { IdentityScreen } from '../screens/IdentityScreen';
+import { SecureNotesScreen } from '../screens/SecureNotesScreen';
 
 const navigationRef = createNavigationContainerRef();
 const Stack = createStackNavigator();
@@ -29,10 +32,8 @@ export const AppNavigator: React.FC = () => {
   useEffect(() => {
     checkSetup();
 
-    // Auto-lock logic after inactivity in background
     const subscription = AppState.addEventListener('change', async (nextState: AppStateStatus) => {
       if (nextState === 'background') {
-        // Record timestamp in storage
         await AsyncStorage.setItem('securex_background_time', Date.now().toString());
       }
 
@@ -49,14 +50,13 @@ export const AppNavigator: React.FC = () => {
           if (enabled) {
             const elapsedMins = (Date.now() - backgroundTimestamp) / 1000 / 60;
             if (elapsedMins >= duration) {
-              // Timeout reached
               lock();
               if (navigationRef.isReady()) {
                 navigationRef.reset({
                   index: 0,
-                  routes: [{ 
-                    name: 'Unlock', 
-                    params: { message: 'Vault locked after inactivity' } 
+                  routes: [{
+                    name: 'Unlock',
+                    params: { message: 'Vault locked after inactivity' }
                   }],
                 });
               }
@@ -69,7 +69,6 @@ export const AppNavigator: React.FC = () => {
     return () => subscription.remove();
   }, [checkSetup, lock]);
 
-  // Determine initial screen
   const getInitialRoute = () => {
     if (!isSetupComplete) return 'Setup';
     if (!isUnlocked) return 'Unlock';
@@ -101,6 +100,9 @@ export const AppNavigator: React.FC = () => {
             <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
             <Stack.Screen name="UserGuide" component={UserGuideScreen} />
             <Stack.Screen name="AutofillSetup" component={AutofillSetupScreen} />
+            <Stack.Screen name="BankCards" component={BankCardScreen} />
+            <Stack.Screen name="Identity" component={IdentityScreen} />
+            <Stack.Screen name="SecureNotes" component={SecureNotesScreen} />
           </>
         )}
       </Stack.Navigator>

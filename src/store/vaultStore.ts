@@ -213,7 +213,8 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   },
 
   lock: () => {
-    MasterPasswordManager.lockVault();
+    MasterPasswordManager.lockVault();  
+    NativeModules.AutofillModule?.clearVaultKey();
     set({ isUnlocked: false, credentials: [], filteredCredentials: [] });
   },
 

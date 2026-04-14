@@ -147,6 +147,15 @@ export class CryptoService {
     }
   }
 
+  static encryptStringWithKey(plaintext: string, hexKey: string): string {
+    return this.encryptedDataToString(this.encryptWithKey(plaintext, hexKey));
+  }
+
+  static decryptStringWithKey(encryptedStr: string, hexKey: string): string {
+    const data = this.stringToEncryptedData(encryptedStr);
+    return data ? (this.decryptWithKey(data, hexKey) || '') : '';
+  }
+
   // ─────────────────────────────────────────────────────────
   // PASSWORD HASHING
   // Used for storing/verifying the master password itself
