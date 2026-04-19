@@ -9,14 +9,16 @@ import { BottomNav } from '../components/BottomNav';
 import { AppBackground } from '../components/AppBackground';
 import { T } from '../theme/tokens';
 import { useIdentityStore } from '../store/Identityvault';
+import { MicroToast, MicroToastHandle } from '../components/MicroToast';
 
 const TABS = ['All', 'Passport', 'Driving License', "National ID", 'Other'];
 
 export const IdentityScreen: React.FC = () => {
   const navigation = useNavigation();
-  const { docs, loadDocs, addDoc } = useIdentityStore();
+  const { docs, loadDocs, addDoc, deleteDoc } = useIdentityStore();
   const [modalVisible, setModalVisible] = useState(false);
   const [activeTab, setActiveTab] = useState('All');
+  const toastRef = React.useRef<MicroToastHandle>(null);
 
   // Form State
   const [docType, setDocType] = useState('Passport');
@@ -31,7 +33,17 @@ export const IdentityScreen: React.FC = () => {
 
   const handleCopy = (text: string) => {
     Clipboard.setString(text);
-    ToastAndroid.show('Document number copied', ToastAndroid.SHORT);
+    toastRef.current?.show('✔ Document number copied');
+  };
+
+  const handleDelete = (id: string, docName: string) => {
+    Alert.alert('Delete Document?', 'This action cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        await deleteDoc(id);
+        toastRef.current?.show(`✔ ${docName} deleted`);
+      }}
+    ]);
   };
 
   const handleSave = () => {
@@ -66,13 +78,14 @@ export const IdentityScreen: React.FC = () => {
       issueDate: new Date(issueDate).getTime() || undefined,
       expiryDate: new Date(expiryDate).getTime() || undefined,
       issuingCountry: issuingCountry || 'Unknown',
-      extraFields: notes ? { Notes: notes } : {},
+      notes: notes || undefined,
       isFavorite: false,
     });
     setModalVisible(false);
     
     // Reset
     setFullName(''); setDocNumber(''); setIssueDate(''); setExpiryDate(''); setIssuingCountry(''); setNotes('');
+    toastRef.current?.show('✔ Document saved successfully');
   };
 
   const filteredDocs = useMemo(() => {
@@ -153,6 +166,9 @@ export const IdentityScreen: React.FC = () => {
                 <TouchableOpacity onPress={() => handleCopy(doc.docNumber)}>
                   <Text style={s.copyIcon}>📋</Text>
                 </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleDelete(doc.id, doc.fullName)}>
+                  <Text style={s.deleteIcon}>🗑️</Text>
+                </TouchableOpacity>
               </View>
             )
           })
@@ -210,6 +226,7 @@ export const IdentityScreen: React.FC = () => {
         </View>
       </Modal>
 
+      <MicroToast ref={toastRef} />
       <BottomNav activeTab="Vault" />
     </SafeAreaView>
   );
@@ -222,7 +239,7 @@ const s = StyleSheet.create({
   backIcon: { fontSize: 24, color: T.white, fontWeight: '800' },
   heading: { fontSize: 20, fontWeight: '800', color: T.white },
   addBtn: { backgroundColor: T.cyanA12, paddingHorizontal: 14, paddingVertical: 8, borderRadius: T.rPill, borderWidth: 1, borderColor: T.cyanA18 },
-  addBtnText: { color: T.cyan, fontWeight: '700', fontSize: 13, ...T.fontMono },
+  addBtnText: { color: T.cyan, ...T.fontMono, fontWeight: '700', fontSize: 13 },
   
   tabScrollWrap: { height: 40, marginBottom: 16 },
   tabs: { paddingHorizontal: T.pad, gap: 10 },
@@ -244,16 +261,17 @@ const s = StyleSheet.create({
   cardIcon: { fontSize: 24 },
   cardInfo: { flex: 1 },
   docName: { fontSize: 16, fontWeight: '700', color: T.white, marginBottom: 4 },
-  docDetails: { fontSize: 12, color: T.faint, ...T.fontMono, marginBottom: 6 },
+  docDetails: { color: T.faint, ...T.fontMono, fontSize: 12, marginBottom: 6 },
   docFooter: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   docLoc: { fontSize: 11, color: T.muted, fontWeight: '600', textTransform: 'uppercase' },
-  docExp: { fontSize: 11, color: T.muted, ...T.fontMono },
+  docExp: { color: T.muted, ...T.fontMono, fontSize: 11 },
   badgeWarn: { backgroundColor: T.warningA14, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: 'rgba(245,166,35,0.3)' },
-  badgeTextWarn: { fontSize: 10, color: T.warning, fontWeight: '800', ...T.fontMono },
+  badgeTextWarn: { color: T.warning, ...T.fontMono, fontSize: 10, fontWeight: '800' },
   badgeExpired: { backgroundColor: T.dangerA14, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: 'rgba(255,77,109,0.3)' },
-  badgeTextExpired: { fontSize: 10, color: T.danger, fontWeight: '800', ...T.fontMono },
+  badgeTextExpired: { color: T.danger, ...T.fontMono, fontSize: 10, fontWeight: '800' },
   
   copyIcon: { fontSize: 18, color: T.faint, padding: 8 },
+  deleteIcon: { fontSize: 18, color: T.danger, padding: 8, marginLeft: 4 },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: '#11151A', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: T.pad, maxHeight: '90%', borderWidth: 1, borderColor: T.borderTop },
@@ -267,7 +285,7 @@ const s = StyleSheet.create({
   typePillTextActive: { color: T.cyan, fontWeight: '700' },
 
   inputLabel: { ...T.fontLabel, color: T.muted, marginBottom: 8, marginTop: 12 },
-  input: { backgroundColor: T.glass, borderWidth: 1, borderColor: T.border, borderRadius: 12, padding: 14, color: T.white, fontSize: 16, ...T.fontMono },
+  input: { backgroundColor: T.glass, borderWidth: 1, borderColor: T.border, borderRadius: 12, padding: 14, color: T.white, ...T.fontMono, fontSize: 16 },
   row: { flexDirection: 'row' },
   flex1: { flex: 1 },
   saveBtn: { backgroundColor: T.cyan, paddingVertical: 16, borderRadius: 16, alignItems: 'center', marginTop: 32, marginBottom: 24 },

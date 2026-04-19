@@ -11,10 +11,14 @@ import { AppBackground } from '../components/AppBackground';
 import { T } from '../theme/tokens';
 import { useBankCardStore, BankCard } from '../store/BankCardVault';
 
+import { MicroToast, MicroToastHandle } from '../components/MicroToast';
+
 export const BankCardScreen: React.FC = () => {
   const navigation = useNavigation();
-  const { cards, loadCards, addCard } = useBankCardStore();
+  const { cards, loadCards, addCard, deleteCard } = useBankCardStore();
   const [modalVisible, setModalVisible] = useState(false);
+  const toastRef = React.useRef<MicroToastHandle>(null);
+  const [showCvv, setShowCvv] = useState<Record<string, boolean>>({});
 
   // Form State
   const [cardNumber, setCardNumber] = useState('');
@@ -28,9 +32,23 @@ export const BankCardScreen: React.FC = () => {
     loadCards();
   }, [loadCards]);
 
-  const handleCopy = (text: string) => {
+  const handleCopy = (text: string, customMsg?: string) => {
     Clipboard.setString(text);
-    ToastAndroid.show('Card number copied', ToastAndroid.SHORT);
+    toastRef.current?.show(`✔ ${customMsg || 'Card number copied'}`);
+  };
+
+  const handleDelete = (id: string, bankName: string) => {
+    Alert.alert('Delete Card?', 'This action cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        await deleteCard(id);
+        toastRef.current?.show(`✔ ${bankName} card deleted`);
+      }}
+    ]);
+  };
+
+  const toggleCvv = (id: string) => {
+    setShowCvv(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
   const handleSave = () => {
@@ -56,13 +74,15 @@ export const BankCardScreen: React.FC = () => {
     setExpiry('');
     setCvv('');
     setBankName('');
+    toastRef.current?.show('✔ Card saved successfully');
   };
 
   const getGradientColors = (type: string) => {
     switch (type) {
-      case 'Visa': return ['#1a2980', '#26d0ce'];
-      case 'Mastercard': return ['#f12711', '#f5af19'];
-      case 'Amex': return ['#3a7bd5', '#3a6073'];
+      case 'Visa': return ['#4a00e0', '#8e2de2'];
+      case 'Mastercard': return ['#ff4b1f', '#ff9068'];
+      case 'Amex': return ['#11998e', '#38ef7d'];
+      case 'RuPay': return ['#000046', '#1CB5E0'];
       default: return ['#333333', '#111111'];
     }
   };
@@ -133,9 +153,21 @@ export const BankCardScreen: React.FC = () => {
                 <View style={s.listInfo}>
                   <Text style={s.listBankName}>{card.bankName}</Text>
                   <Text style={s.listCardType}>{card.cardType} • {card.maskedNumber.slice(-4)}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                    <Text style={s.cvvLabel}>CVV: </Text>
+                    <Text style={s.cvvText}>
+                      {showCvv[card.id] ? card.cvv : '•••'}
+                    </Text>
+                    <TouchableOpacity onPress={() => toggleCvv(card.id)}>
+                      <Text style={s.cvvToggleIcon}>{showCvv[card.id] ? '👁️' : '🙈'}</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-                <TouchableOpacity onPress={() => handleCopy(card.cardNumber)}>
+                <TouchableOpacity onPress={() => handleCopy(card.cardNumber, 'Card number')}>
                   <Text style={s.copyIcon}>📋</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleDelete(card.id, card.bankName)}>
+                  <Text style={s.deleteIcon}>🗑️</Text>
                 </TouchableOpacity>
               </View>
             ))}
@@ -178,7 +210,7 @@ export const BankCardScreen: React.FC = () => {
 
               <Text style={s.inputLabel}>Card Type</Text>
               <View style={s.typeRow}>
-                {['Visa', 'Mastercard', 'Amex'].map(t => (
+                {['Visa', 'Mastercard', 'Amex', 'RuPay'].map(t => (
                   <TouchableOpacity key={t} style={[s.typeBtn, cardType === t && s.typeBtnActive]} onPress={() => setCardType(t)}>
                     <Text style={[s.typeBtnText, cardType === t && s.typeBtnTextActive]}>{t}</Text>
                   </TouchableOpacity>
@@ -193,6 +225,7 @@ export const BankCardScreen: React.FC = () => {
         </View>
       </Modal>
 
+      <MicroToast ref={toastRef} />
       <BottomNav activeTab="Vault" />
     </SafeAreaView>
   );
@@ -205,7 +238,7 @@ const s = StyleSheet.create({
   backIcon: { fontSize: 24, color: T.white, fontWeight: '800' },
   heading: { fontSize: 20, fontWeight: '800', color: T.white },
   addBtn: { backgroundColor: T.cyanA12, paddingHorizontal: 14, paddingVertical: 8, borderRadius: T.rPill, borderWidth: 1, borderColor: T.cyanA18 },
-  addBtnText: { color: T.cyan, fontWeight: '700', fontSize: 13, ...T.fontMono },
+  addBtnText: { color: T.cyan, ...T.fontMono, fontWeight: '700', fontSize: 13 },
   
   content: { paddingBottom: 110 },
   
@@ -219,10 +252,10 @@ const s = StyleSheet.create({
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   chip: { fontSize: 24 },
   cardNetworkLabel: { color: 'white', fontWeight: '800', fontSize: 16, fontStyle: 'italic' },
-  cardNumberDisplay: { color: 'white', fontSize: 22, fontWeight: '500', letterSpacing: 2, ...T.fontMono },
+  cardNumberDisplay: { color: 'white', ...T.fontMono, fontSize: 22, fontWeight: '500', letterSpacing: 2 },
   cardBottom: { flexDirection: 'row', justifyContent: 'space-between' },
   cardLabel: { fontSize: 9, color: 'rgba(255,255,255,0.6)', letterSpacing: 1, marginBottom: 4 },
-  cardValue: { color: 'white', fontSize: 14, fontWeight: '600', ...T.fontMono },
+  cardValue: { color: 'white', ...T.fontMono, fontSize: 14, fontWeight: '600' },
 
   sectionTitle: { ...T.fontLabel, color: T.muted, marginHorizontal: T.pad, marginBottom: 12 },
   listCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: T.glass, marginHorizontal: T.pad, padding: 16, borderRadius: T.rCard, marginBottom: 10, borderWidth: 1, borderColor: T.border },
@@ -230,8 +263,12 @@ const s = StyleSheet.create({
   listIcon: { fontSize: 20 },
   listInfo: { flex: 1 },
   listBankName: { fontSize: 16, fontWeight: '700', color: T.white, marginBottom: 4 },
-  listCardType: { fontSize: 13, color: T.muted, ...T.fontMono },
+  listCardType: { color: T.muted, ...T.fontMono, fontSize: 13 },
+  cvvLabel: { fontSize: 11, color: T.muted },
+  cvvText: { color: T.white, ...T.fontMono, fontSize: 13, letterSpacing: 2, marginRight: 8 },
+  cvvToggleIcon: { fontSize: 14, opacity: 0.8 },
   copyIcon: { fontSize: 18, color: T.faint, padding: 8 },
+  deleteIcon: { fontSize: 18, color: T.danger, padding: 8, marginLeft: 4 },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: '#11151A', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: T.pad, maxHeight: '90%', borderWidth: 1, borderColor: T.borderTop },
@@ -239,7 +276,7 @@ const s = StyleSheet.create({
   modalTitle: { fontSize: 20, fontWeight: '800', color: T.white },
   closeText: { fontSize: 20, color: T.muted, fontWeight: '800' },
   inputLabel: { ...T.fontLabel, color: T.muted, marginBottom: 8, marginTop: 16 },
-  input: { backgroundColor: T.glass, borderWidth: 1, borderColor: T.border, borderRadius: 12, padding: 14, color: T.white, fontSize: 16, ...T.fontMono },
+  input: { backgroundColor: T.glass, borderWidth: 1, borderColor: T.border, borderRadius: 12, padding: 14, color: T.white, ...T.fontMono, fontSize: 16 },
   row: { flexDirection: 'row' },
   flex1: { flex: 1 },
   typeRow: { flexDirection: 'row', gap: 10 },

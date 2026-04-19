@@ -15,6 +15,7 @@ export interface IdentityDocument {
   fullName: string;
   dob?: string;
   address?: string;
+  notes?: string;
   issuingCountry: string;
   issueDate?: number;
   expiryDate?: number;

@@ -3,13 +3,14 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { T } from '../theme/tokens';
 
-interface Props { activeTab: 'Home' | 'Vault' | 'Security' | 'Settings'; }
+interface Props { activeTab: 'Home' | 'Passwords' | 'Vault' | 'Security' | 'Settings'; }
 
 const TABS = [
-  { id: 'Home',     screen: 'Dashboard', icon: '🏠' },
-  { id: 'Vault',    screen: 'Vault',     icon: '🗄️' },
-  { id: 'Security', screen: 'Security',  icon: '🛡️' },
-  { id: 'Settings', screen: 'Settings',  icon: '⚙️' },
+  { id: 'Home',      screen: 'Dashboard', icon: '🏠' },
+  { id: 'Passwords', screen: 'Vault',     icon: '🔑' },
+  { id: 'Vault',     screen: 'VaultHub',  icon: '💳' },
+  { id: 'Security',  screen: 'Security',  icon: '🛡️' },
+  { id: 'Settings',  screen: 'Settings',  icon: '⚙️' },
 ] as const;
 
 export const BottomNav: React.FC<Props> = ({ activeTab }) => {

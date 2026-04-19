@@ -22,6 +22,7 @@ import { AutofillSetupScreen } from '../screens/AutofillSetupScreen';
 import { BankCardScreen } from '../screens/BankCardScreen';
 import { IdentityScreen } from '../screens/IdentityScreen';
 import { SecureNotesScreen } from '../screens/SecureNotesScreen';
+import { VaultHubScreen } from '../screens/VaultHubScreen';
 
 const navigationRef = createNavigationContainerRef();
 const Stack = createStackNavigator();
@@ -103,6 +104,7 @@ export const AppNavigator: React.FC = () => {
             <Stack.Screen name="BankCards" component={BankCardScreen} />
             <Stack.Screen name="Identity" component={IdentityScreen} />
             <Stack.Screen name="SecureNotes" component={SecureNotesScreen} />
+            <Stack.Screen name="VaultHub" component={VaultHubScreen} />
           </>
         )}
       </Stack.Navigator>

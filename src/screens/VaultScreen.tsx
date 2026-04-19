@@ -27,16 +27,6 @@ interface Credential {
 
 const CATEGORIES = ['All', 'Banking', 'Social', 'Work', 'Shopping', 'Gaming', 'Other'];
 
-// ─── Vault Hub Tabs ────────────────────────────────────────────────────────────
-const VAULT_TABS = [
-  { id: 'Passwords', label: 'Passwords', icon: '🔑', screen: null },
-  { id: 'BankCards', label: 'Bank Cards', icon: '💳', screen: 'BankCards' },
-  { id: 'Identity', label: 'Identity', icon: '🪪', screen: 'Identity' },
-  { id: 'Notes', label: 'Notes', icon: '📝', screen: 'SecureNotes' },
-] as const;
-
-type VaultTabId = typeof VAULT_TABS[number]['id'];
-
 // ─── Empty State ───────────────────────────────────────────────────────────────
 const VaultEmpty: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
   const bob = useRef(new Animated.Value(0)).current;
@@ -80,153 +70,6 @@ const ev = StyleSheet.create({
   btnText: { ...T.fontCaption, color: T.cyan, fontWeight: '700' },
 });
 
-// ─── VaultHub Tab Bar ──────────────────────────────────────────────────────────
-interface VaultHubBarProps {
-  activeTab: VaultTabId;
-  onSelect: (tab: VaultTabId) => void;
-}
-
-const VaultHubBar: React.FC<VaultHubBarProps> = ({ activeTab, onSelect }) => {
-  return (
-    <View style={vh.wrapper}>
-      {VAULT_TABS.map((tab) => {
-        const active = activeTab === tab.id;
-        return (
-          <TouchableOpacity
-            key={tab.id}
-            style={[vh.tab, active && vh.tabActive]}
-            onPress={() => onSelect(tab.id)}
-            activeOpacity={0.75}
-          >
-            {/* cyan dot indicator on top */}
-            {active && <View style={vh.dot} />}
-            <View style={[vh.iconBadge, active && vh.iconBadgeActive]}>
-              <Text style={vh.tabIcon}>{tab.icon}</Text>
-            </View>
-            <Text style={[vh.tabLabel, active && vh.tabLabelActive]}>{tab.label}</Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
-};
-
-const vh = StyleSheet.create({
-  wrapper: {
-    flexDirection: 'row',
-    marginHorizontal: T.pad,
-    marginBottom: 18,
-    backgroundColor: T.glass,
-    borderRadius: T.rCard,
-    borderWidth: 1,
-    borderColor: T.border,
-    padding: 6,
-    gap: 4,
-  },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderRadius: 14,
-    position: 'relative',
-    gap: 5,
-  },
-  tabActive: {
-    backgroundColor: T.cyanA08,
-    borderWidth: 1,
-    borderColor: T.cyanA18,
-  },
-  dot: {
-    position: 'absolute',
-    top: -2,
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: T.cyan,
-    shadowColor: T.cyan,
-    shadowOpacity: 0.9,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 6,
-  },
-  iconBadge: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconBadgeActive: {
-    backgroundColor: T.cyanA12,
-  },
-  tabIcon: { fontSize: 16 },
-  tabLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: T.muted,
-    letterSpacing: 0.3,
-  },
-  tabLabelActive: {
-    color: T.cyan,
-    fontWeight: '700',
-  },
-});
-
-// ─── Quick Access Card (for navigating to BankCards / Identity / Notes) ────────
-interface VaultSectionCardProps {
-  icon: string;
-  title: string;
-  desc: string;
-  accentColor: string;
-  onPress: () => void;
-}
-
-const VaultSectionCard: React.FC<VaultSectionCardProps> = ({ icon, title, desc, accentColor, onPress }) => (
-  <TouchableOpacity style={[sc.card]} onPress={onPress} activeOpacity={0.82}>
-    <View style={[sc.accent, { backgroundColor: accentColor }]} />
-    <View style={[sc.iconWrap, { backgroundColor: accentColor + '22' }]}>
-      <Text style={sc.icon}>{icon}</Text>
-    </View>
-    <View style={sc.text}>
-      <Text style={sc.title}>{title}</Text>
-      <Text style={sc.desc}>{desc}</Text>
-    </View>
-    <Text style={[sc.arrow, { color: accentColor }]}>→</Text>
-  </TouchableOpacity>
-);
-
-const sc = StyleSheet.create({
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: T.pad,
-    marginBottom: 10,
-    backgroundColor: T.glass,
-    borderRadius: T.rCard,
-    padding: T.cardPadV,
-    borderWidth: 1,
-    borderColor: T.border,
-    overflow: 'hidden',
-    shadowColor: '#000', shadowOpacity: 0.25,
-    shadowRadius: 16, shadowOffset: { width: 0, height: 4 }, elevation: 6,
-  },
-  accent: {
-    position: 'absolute', left: 0, top: 10, bottom: 10,
-    width: 3, borderRadius: 2,
-  },
-  iconWrap: {
-    width: 40, height: 40, borderRadius: 12,
-    alignItems: 'center', justifyContent: 'center',
-    marginLeft: 8, marginRight: 14,
-  },
-  icon: { fontSize: 20 },
-  text: { flex: 1 },
-  title: { fontSize: 15, fontWeight: '700', color: T.white },
-  desc: { ...T.fontCaption, color: T.muted, marginTop: 2 },
-  arrow: { fontSize: 18, fontWeight: '800', marginLeft: 8 },
-});
-
 // ─── Main Screen ───────────────────────────────────────────────────────────────
 export const VaultScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -235,7 +78,7 @@ export const VaultScreen: React.FC = () => {
     setSearchQuery, setCategory, deleteCredential, loadCredentials, loadStats,
   } = useVaultStore();
 
-  const [activeVaultTab, setActiveVaultTab] = React.useState<VaultTabId>('Passwords');
+
   const [selectedCred, setSelectedCred] = React.useState<Credential | null>(null);
   const [isSheetVisible, setIsSheetVisible] = React.useState(false);
   const toastRef = React.useRef<MicroToastHandle>(null);
@@ -271,16 +114,6 @@ export const VaultScreen: React.FC = () => {
         }
       }
     ]);
-  };
-
-  // Handle tab selection — navigate away for non-password tabs
-  const handleVaultTabSelect = (tabId: VaultTabId) => {
-    const tab = VAULT_TABS.find(t => t.id === tabId);
-    if (tab?.screen) {
-      navigation.navigate(tab.screen);
-    } else {
-      setActiveVaultTab(tabId);
-    }
   };
 
   // Header animation
@@ -329,32 +162,7 @@ export const VaultScreen: React.FC = () => {
               <View style={s.errorBanner}><Text style={s.errorText}>⚠ {error}</Text></View>
             ) : null}
 
-            {/* ── 2. VAULT HUB TAB BAR ── */}
-            <VaultHubBar activeTab={activeVaultTab} onSelect={handleVaultTabSelect} />
 
-            {/* ── 3. QUICK ACCESS CARDS (shown above password list always) ── */}
-            <Text style={s.sectionLabel}>QUICK ACCESS</Text>
-            <VaultSectionCard
-              icon="💳"
-              title="Bank Cards"
-              desc="Saved debit & credit cards"
-              accentColor={T.amber}
-              onPress={() => navigation.navigate('BankCards')}
-            />
-            <VaultSectionCard
-              icon="🪪"
-              title="Identity"
-              desc="IDs, passports, licenses"
-              accentColor={T.purple}
-              onPress={() => navigation.navigate('Identity')}
-            />
-            <VaultSectionCard
-              icon="📝"
-              title="Secure Notes"
-              desc="Encrypted private notes"
-              accentColor={T.success}
-              onPress={() => navigation.navigate('SecureNotes')}
-            />
 
             {/* ── 4. SEARCH BAR ── */}
             <Text style={[s.sectionLabel, { marginTop: 20 }]}>PASSWORDS</Text>
@@ -435,7 +243,7 @@ export const VaultScreen: React.FC = () => {
       />
 
       <MicroToast ref={toastRef} />
-      <BottomNav activeTab="Vault" />
+      <BottomNav activeTab="Passwords" />
     </SafeAreaView>
   );
 };
