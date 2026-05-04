@@ -1,8 +1,9 @@
 import React, { useEffect } from 'react';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus, Linking, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import CryptoJS from 'crypto-js';
 
 import { useVaultStore } from '../store/vaultStore';
 import { T } from '../theme/tokens';
@@ -23,15 +24,64 @@ import { BankCardScreen } from '../screens/BankCardScreen';
 import { IdentityScreen } from '../screens/IdentityScreen';
 import { SecureNotesScreen } from '../screens/SecureNotesScreen';
 import { VaultHubScreen } from '../screens/VaultHubScreen';
+import { ImportExportScreen } from '../screens/ImportExportScreen';
+import { ShareReceiveScreen } from '../screens/ShareReceiveScreen';
+import { ActiveSharesScreen } from '../screens/ActiveSharesScreen';
+import { LinkingOptions } from '@react-navigation/native';
 
 const navigationRef = createNavigationContainerRef();
 const Stack = createStackNavigator();
+
+const linking: LinkingOptions<any> = {
+  prefixes: ['securex://', 'https://securex.app'],
+  config: {
+    screens: {
+      ShareReceive: 'share',
+    },
+  },
+};
 
 export const AppNavigator: React.FC = () => {
   const { isSetupComplete, isUnlocked, checkSetup, lock } = useVaultStore();
 
   useEffect(() => {
     checkSetup();
+
+    // ── DEEP LINK HANDLER ──
+    const handleUrl = (url: string | null) => {
+      if (!url) return;
+      if (url.startsWith('securex://share')) {
+        const urlObj = new URL(url.replace('securex://', 'http://securex.app/'));
+        const data = urlObj.searchParams.get('data');
+        const expires = urlObj.searchParams.get('expires');
+
+        if (!data || !expires) return;
+
+        if (parseInt(expires) < Date.now()) {
+          Alert.alert('Link Expired', 'This credential share link is no longer valid.');
+          return;
+        }
+
+        try {
+          // Decode B64
+          let decoded: string;
+          try {
+            decoded = atob(decodeURIComponent(data));
+          } catch {
+            decoded = CryptoJS.enc.Base64.parse(decodeURIComponent(data)).toString(CryptoJS.enc.Utf8);
+          }
+          
+          if (navigationRef.isReady()) {
+            navigationRef.navigate('ShareReceive', { data: decoded });
+          }
+        } catch (e) {
+          Alert.alert('Error', 'Failed to decode shared link data.');
+        }
+      }
+    };
+
+    Linking.getInitialURL().then(handleUrl);
+    const linkingSub = Linking.addEventListener('url', (event) => handleUrl(event.url));
 
     const subscription = AppState.addEventListener('change', async (nextState: AppStateStatus) => {
       if (nextState === 'background') {
@@ -67,7 +117,10 @@ export const AppNavigator: React.FC = () => {
       }
     });
 
-    return () => subscription.remove();
+    return () => {
+      subscription.remove();
+      linkingSub.remove();
+    };
   }, [checkSetup, lock]);
 
   const getInitialRoute = () => {
@@ -83,7 +136,7 @@ export const AppNavigator: React.FC = () => {
   };
 
   return (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer ref={navigationRef} linking={linking}>
       <Stack.Navigator screenOptions={screenOptions} initialRouteName={getInitialRoute()}>
         {!isSetupComplete ? (
           <Stack.Screen name="Setup" component={SetupScreen} />
@@ -105,6 +158,9 @@ export const AppNavigator: React.FC = () => {
             <Stack.Screen name="Identity" component={IdentityScreen} />
             <Stack.Screen name="SecureNotes" component={SecureNotesScreen} />
             <Stack.Screen name="VaultHub" component={VaultHubScreen} />
+            <Stack.Screen name="ImportExport" component={ImportExportScreen} />
+            <Stack.Screen name="ActiveShares" component={ActiveSharesScreen} />
+            <Stack.Screen name="ShareReceive" component={ShareReceiveScreen} />
           </>
         )}
       </Stack.Navigator>

@@ -227,6 +227,7 @@ export const VaultScreen: React.FC = () => {
         renderItem={({ item }: { item: any }) => (
           <CredentialCard
             credential={item}
+            onPress={() => navigation.navigate('CredentialDetail', { id: item.id })}
             onPressIcon={() => handleOpenSheet(item)}
             onCopy={handleCopy}
           />

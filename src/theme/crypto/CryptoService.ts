@@ -50,6 +50,14 @@ export class CryptoService {
     return key.toString();
   }
 
+  static deriveShareKey(pin: string, salt: string): string {
+    const key = CryptoJS.PBKDF2(pin, salt, {
+      keySize: 256 / 32,
+      iterations: 200000, 
+    });
+    return key.toString();
+  }
+
   static generateSalt(): string {
     return this.bytesToHex(this.randomBytes(256 / 8));
   }

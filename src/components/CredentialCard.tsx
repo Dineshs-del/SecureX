@@ -8,6 +8,7 @@ import { T, getCategoryColor } from '../theme/tokens';
 
 interface Props {
   credential: any;
+  onPress: () => void;
   onPressIcon: () => void;
   onCopy: (text: string, label: string) => void;
 }
@@ -81,7 +82,7 @@ export const CredentialCard: React.FC<Props> = ({
   const totp = credential.totp ? getFakeTOTP(credential.id) : null;
 
   return (
-    <View style={s.card}>
+    <TouchableOpacity style={s.card} activeOpacity={0.9} onPress={onPressIcon}>
       <View style={s.topHL} />
 
       {/* LEFT: Brand Icon */}
@@ -150,7 +151,7 @@ export const CredentialCard: React.FC<Props> = ({
           <Text style={[s.catText, { color: catColor }]}>{credential.category}</Text>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 

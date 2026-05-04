@@ -6,6 +6,7 @@ import {
 import { T, getCategoryColor, getBrandColor } from '../theme/tokens';
 import { getPasswordStrength } from '../store/vaultStore';
 import Clipboard from '@react-native-clipboard/clipboard';
+import { ShareCreateModal } from './ShareCreateModal';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SHEET_HEIGHT = SCREEN_HEIGHT * 0.75;
@@ -42,6 +43,7 @@ export const CredentialBottomSheet: React.FC<Props> = ({
   isVisible, credential, onClose, onEdit, onDelete, onCopy,
 }) => {
   const [showPass, setShowPass] = useState(false);
+  const [isShareVisible, setIsShareVisible] = useState(false);
   const [seconds, setSeconds] = useState(30 - (Math.floor(Date.now() / 1000) % 30));
   const anim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
@@ -195,6 +197,9 @@ export const CredentialBottomSheet: React.FC<Props> = ({
           </View>
 
           {/* Actions */}
+          <TouchableOpacity style={s.shareBtn} onPress={() => setIsShareVisible(true)}>
+             <Text style={s.shareBtnText}>🔗 Share securely</Text>
+          </TouchableOpacity>
           <View style={s.actionRow}>
             <TouchableOpacity style={s.editBtn} onPress={() => onEdit(credential.id)}>
                <Text style={s.editBtnText}>✏️ Edit</Text>
@@ -205,6 +210,11 @@ export const CredentialBottomSheet: React.FC<Props> = ({
           </View>
         </ScrollView>
       </Animated.View>
+      <ShareCreateModal 
+        isVisible={isShareVisible} 
+        credential={credential} 
+        onClose={() => setIsShareVisible(false)} 
+      />
     </Modal>
   );
 };
@@ -270,6 +280,15 @@ const s = StyleSheet.create({
   lastAccessedRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12, marginBottom: 24, paddingLeft: 4 },
   lastLabel: { ...T.fontMono, fontSize: 11, color: T.muted, marginRight: 8 },
   lastValue: { ...T.fontMono, fontSize: 11, color: T.muted },
+
+  shareBtn: {
+    width: '100%', height: 50, borderRadius: 14,
+    backgroundColor: 'rgba(0,229,255,0.08)',
+    borderWidth: 1, borderColor: 'rgba(0,229,255,0.3)',
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 12,
+  },
+  shareBtnText: { fontFamily: 'Syne', fontWeight: '700', fontSize: 15, color: T.cyan },
 
   actionRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   editBtn: {

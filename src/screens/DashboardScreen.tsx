@@ -55,12 +55,14 @@ export const DashboardScreen: React.FC = () => {
   const total    = stats.total ?? 0;
   const weak     = stats.weak ?? 0;
   const breached = stats.breached ?? 0;
+  const strong   = credentials.filter(c => c.strength === 'strong').length;
+  const score    = total > 0 ? Math.round((strong / total) * 100) : 100;
 
   // Header accent bar: red if breached > 0, else amber if weak > 0, else green
   const accentColor = breached > 0 ? T.danger : (weak > 0 ? T.warning : T.success);
 
   // Recent 3 credentials
-  const recent = credentials.slice(0, 3);
+  const recent = [...credentials].sort((a,b) => (b.lastAccessed || 0) - (a.lastAccessed || 0)).slice(0, 3);
 
   return (
     <SafeAreaView style={s.container}>
@@ -89,13 +91,13 @@ export const DashboardScreen: React.FC = () => {
 
             <View style={s.statsRow}>
               <View style={s.statCol}>
-                <Text style={[s.statNum, s.statNumGlow]}>{total}</Text>
-                <Text style={s.statName}>Saved</Text>
+                <Text style={[s.statNum, s.statNumGlow]}>{score}%</Text>
+                <Text style={s.statName}>Score</Text>
               </View>
               <View style={s.statDivider} />
               <View style={s.statCol}>
-                <Text style={[s.statNum, weak > 0 && { color: T.warning, textShadowColor: 'rgba(255,166,35,0.35)', textShadowRadius: 8 }]}>{weak}</Text>
-                <Text style={s.statName}>Weak</Text>
+                <Text style={[s.statNum, weak > 0 && { color: T.warning, textShadowColor: 'rgba(255,166,35,0.35)', textShadowRadius: 8 }]}>{total}</Text>
+                <Text style={s.statName}>Total</Text>
               </View>
               <View style={s.statDivider} />
               <View style={s.statCol}>
@@ -186,7 +188,11 @@ export const DashboardScreen: React.FC = () => {
                 const initial = (cred.name || '?').charAt(0).toUpperCase();
                 const isLast = i === recent.length - 1;
                 return (
-                  <View key={cred.id} style={[s.recentRow, !isLast && s.recentRowBorder]}>
+                  <TouchableOpacity 
+                    key={cred.id} 
+                    style={[s.recentRow, !isLast && s.recentRowBorder]}
+                    onPress={() => navigation.navigate('CredentialDetail', { id: cred.id })}
+                  >
                     <View style={s.recentAvatar}>
                       <Text style={s.recentAvatarText}>{initial}</Text>
                     </View>
@@ -195,7 +201,7 @@ export const DashboardScreen: React.FC = () => {
                       <Text style={s.recentSub}>Saved credential</Text>
                     </View>
                     <Text style={s.recentLock}>🔒</Text>
-                  </View>
+                  </TouchableOpacity>
                 );
               })
             )}

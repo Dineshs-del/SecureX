@@ -59,7 +59,9 @@ interface SettingRow {
 }
 
 const VAULT_ROWS: SettingRow[] = [
-  { emoji: '📤', iconBg: T.successA14,       accentColor: T.success,   title: 'Export Vault',           desc: 'Download an encrypted backup',      type: 'nav' },
+  { emoji: '📦', iconBg: T.successA14,       accentColor: T.success,   title: 'Import / Export Vault',  desc: 'Backup or restore your vault',      type: 'nav' },
+  { emoji: '⚡', iconBg: T.amberA14,         accentColor: T.amber,     title: 'Autofill Setup',        desc: 'Enable quick login across apps',    type: 'nav' },
+  { emoji: '🔗', iconBg: 'rgba(0,229,255,0.12)', accentColor: T.cyan, title: 'Active Shares', desc: 'Manage your secure share links', type: 'nav' },
   { emoji: '🌙', iconBg: 'rgba(0,229,255,0.12)', accentColor: T.cyan, title: 'Dark Mode', desc: 'Always on — pure dark theme', type: 'toggle', toggleKey: 'darkmode' },
 ];
 
@@ -107,20 +109,17 @@ export const SettingsScreen: React.FC = () => {
     isBiometricEnabled, setBiometricEnabled,
     isAutoLockEnabled, setAutoLockEnabled,
     getAutoLockDuration, setAutoLockDuration,
+    autoLockEnabled, autoLockDuration,
   } = useVaultStore();
   const toastRef = useRef<MicroToastHandle>(null);
 
-  const [toggles, setToggles] = useState({ biometric: false, autolock: true, darkmode: true });
-  const [autolockDuration, setAutolockDuration] = useState(5);
+  const [toggles, setToggles] = useState({ biometric: false, darkmode: true });
   const [biometryTypeLabel, setBiometryTypeLabel] = useState('Biometric');
 
   useEffect(() => {
     const loadState = async () => {
       const bio = await isBiometricEnabled();
-      const lock = await isAutoLockEnabled();
-      const dur = await getAutoLockDuration();
-      setToggles(p => ({ ...p, biometric: bio, autolock: lock }));
-      setAutolockDuration(dur);
+      setToggles(p => ({ ...p, biometric: bio }));
 
       const { available, biometryType } = await rnBiometrics.isSensorAvailable();
       if (available) {
@@ -142,7 +141,7 @@ export const SettingsScreen: React.FC = () => {
     { 
       emoji: '⏱️', iconBg: 'rgba(139,92,246,0.14)', accentColor: '#8b5cf6', 
       title: 'Auto-Lock Timeout',      
-      desc: toggles.autolock ? `Locks after ${autolockDuration}m of inactivity` : 'Vault stays unlocked',             
+      desc: autoLockEnabled ? `Locks after ${autoLockDuration}m of inactivity` : 'Vault stays unlocked',             
       type: 'toggle', toggleKey: 'autolock' 
     },
   ];
@@ -180,9 +179,8 @@ export const SettingsScreen: React.FC = () => {
         toastRef.current?.show('Biometric unlock disabled');
       }
     } else if (key === 'autolock') {
-      const newVal = !toggles.autolock;
+      const newVal = !autoLockEnabled;
       await setAutoLockEnabled(newVal);
-      setToggles(p => ({ ...p, autolock: newVal }));
       toastRef.current?.show(newVal ? 'Auto-lock enabled' : 'Auto-lock disabled');
     } else if (key === 'darkmode') {
       toastRef.current?.show('SecureX runs in pure dark mode 🌙');
@@ -193,7 +191,6 @@ export const SettingsScreen: React.FC = () => {
 
   const updateDuration = async (mins: number) => {
     await setAutoLockDuration(mins);
-    setAutolockDuration(mins);
   };
 
   return (
@@ -214,7 +211,7 @@ export const SettingsScreen: React.FC = () => {
         {securityRows.map((row) => (
           <View key={row.title}>
             <Row row={row}
-              toggleValue={row.toggleKey ? toggles[row.toggleKey as keyof typeof toggles] : false}
+              toggleValue={row.toggleKey === 'autolock' ? autoLockEnabled : (row.toggleKey ? toggles[row.toggleKey as keyof typeof toggles] : false)}
               onToggle={row.toggleKey ? () => handleToggle(row.toggleKey!) : undefined}
               onPress={row.type === 'nav' ? () => {
                 if (row.title === 'Change Master Password') {
@@ -224,15 +221,15 @@ export const SettingsScreen: React.FC = () => {
                 }
               } : undefined}
             />
-            {row.toggleKey === 'autolock' && toggles.autolock && (
+            {row.toggleKey === 'autolock' && autoLockEnabled && (
               <View style={s.pickerWrap}>
                 {[1, 5, 15, 30, 60].map((d) => (
                   <TouchableOpacity
                     key={d}
-                    style={[s.chip, autolockDuration === d && s.chipActive]}
+                    style={[s.chip, autoLockDuration === d && s.chipActive]}
                     onPress={() => updateDuration(d)}
                   >
-                    <Text style={[s.chipText, autolockDuration === d && s.chipTextActive]}>
+                    <Text style={[s.chipText, autoLockDuration === d && s.chipTextActive]}>
                       {d < 60 ? `${d} min` : '1 hr'}
                     </Text>
                   </TouchableOpacity>
@@ -248,7 +245,17 @@ export const SettingsScreen: React.FC = () => {
           <Row key={row.title} row={row}
             toggleValue={row.toggleKey === 'darkmode' ? true : (row.toggleKey ? toggles[row.toggleKey as keyof typeof toggles] : false)}
             onToggle={row.toggleKey ? () => handleToggle(row.toggleKey!) : undefined}
-            onPress={row.type === 'nav' ? () => Alert.alert(row.title, 'Coming soon.') : undefined}
+            onPress={row.type === 'nav' ? () => {
+              if (row.title === 'Import / Export Vault') {
+                navigation.navigate('ImportExport');
+              } else if (row.title === 'Autofill Setup') {
+                navigation.navigate('AutofillSetup');
+              } else if (row.title === 'Active Shares') {
+                navigation.navigate('ActiveShares');
+              } else {
+                Alert.alert(row.title, 'Coming soon.');
+              }
+            } : undefined}
           />
         ))}
 

@@ -134,6 +134,20 @@ export const CredentialDetailScreen: React.FC = () => {
             </View>
           </View>
 
+          {/* 2FA Section */}
+          {cred.totp ? (
+            <View style={s.glassCard}>
+              <View style={s.topHL} />
+              <Text style={s.label}>TWO-FACTOR AUTH (TOTP)</Text>
+              <View style={s.valRow}>
+                <Text style={[s.value, s.mono]} numberOfLines={1}>{cred.totp}</Text>
+                <TouchableOpacity onPress={() => handleCopy(cred.totp, '2FA Secret')}>
+                  <Text style={s.copyIcon}>⎘</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : null}
+
           {/* Notes */}
           {cred.notes ? (
             <View style={s.glassCard}>

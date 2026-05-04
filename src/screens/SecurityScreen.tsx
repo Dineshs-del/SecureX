@@ -1,9 +1,9 @@
 import React from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, ScrollView,
-  StatusBar,
+  StatusBar, TouchableOpacity,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useVaultStore } from '../store/vaultStore';
 import { BottomNav } from '../components/BottomNav';
 import { T } from '../theme/tokens';
@@ -114,6 +114,7 @@ const TIPS = [
 
 // ─── Main Screen ─────────────────────────────────────────
 export const SecurityScreen: React.FC = () => {
+  const navigation = useNavigation<any>();
   const { stats, credentials, loadStats, loadCredentials } = useVaultStore();
 
   useFocusEffect(
@@ -123,16 +124,23 @@ export const SecurityScreen: React.FC = () => {
     }, [loadCredentials, loadStats])
   );
 
-  const avgScore = stats.securityScore ?? 100;
-  const weak     = stats.weak ?? 0;
-  const breached = stats.breached ?? 0;
-  const reused   = stats.reused ?? 0;
-  const total    = stats.total ?? 0;
+  const total = credentials.length;
   const weakList = credentials.filter(c => c.strength === 'weak');
+  const breachedList = credentials.filter(c => c.breached === true);
+  const strongCount = credentials.filter(c => c.strength === 'strong').length;
+  
+  const avgScore = total > 0 ? Math.round((strongCount / total) * 100) : 100;
+  const weak     = weakList.length;
+  const breached = breachedList.length;
+  const reused   = stats.reused ?? 0;
   const allClean = weak === 0 && breached === 0;
 
   const scoreColor  = avgScore >= 80 ? T.success : avgScore >= 50 ? T.warning : T.danger;
   const scoreLabel  = avgScore >= 80 ? 'All secure' : avgScore >= 50 ? 'Fair' : 'Critical';
+
+  const handleFix = (id: string) => {
+    navigation.navigate('AddCredential', { id });
+  };
 
   return (
     <SafeAreaView style={s.container}>
@@ -184,9 +192,38 @@ export const SecurityScreen: React.FC = () => {
             <Text style={s.weakListTitle}>⚠️ Vulnerable Accounts</Text>
             {weakList.map((cred, i) => (
               <View key={cred.id} style={s.weakItem}>
-                <Text style={s.weakItemName}>{cred.name}</Text>
-                <Text style={s.weakItemReason}>Weak password detected</Text>
+                <View style={s.weakItemRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.weakItemName}>{cred.name}</Text>
+                    <Text style={s.weakItemReason}>Weak password detected</Text>
+                  </View>
+                  <TouchableOpacity style={s.fixBtn} onPress={() => handleFix(cred.id)}>
+                    <Text style={s.fixBtnText}>Fix Now</Text>
+                  </TouchableOpacity>
+                </View>
                 {i < weakList.length - 1 && <View style={s.weakSep} />}
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* ── 4b. BREACHED LIST ── */}
+        {breached > 0 && (
+          <View style={[s.weakListCard, { borderColor: T.danger, backgroundColor: 'rgba(255,77,109,0.05)' }]}>
+            <View style={s.topHL} />
+            <Text style={[s.weakListTitle, { color: T.danger }]}>🚨 Data Breaches Found</Text>
+            {breachedList.map((cred, i) => (
+              <View key={cred.id} style={s.weakItem}>
+                <View style={s.weakItemRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.weakItemName}>{cred.name}</Text>
+                    <Text style={[s.weakItemReason, { color: 'rgba(255,77,109,0.7)' }]}>Password found in data breach</Text>
+                  </View>
+                  <TouchableOpacity style={[s.fixBtn, { borderColor: T.danger }]} onPress={() => handleFix(cred.id)}>
+                    <Text style={[s.fixBtnText, { color: T.danger }]}>Fix Now</Text>
+                  </TouchableOpacity>
+                </View>
+                {i < breachedList.length - 1 && <View style={s.weakSep} />}
               </View>
             ))}
           </View>
@@ -285,4 +322,10 @@ const s = StyleSheet.create({
   weakItemName:  { ...T.fontBody, fontWeight: '700', color: T.white },
   weakItemReason:{ ...T.fontCaption, color: 'rgba(245,166,35,0.7)', fontSize: 11, marginTop: 2 },
   weakSep:       { height: 1, backgroundColor: 'rgba(245,166,35,0.1)', marginTop: 8 },
+  weakItemRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  fixBtn: {
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
+    borderWidth: 1, borderColor: T.warning,
+  },
+  fixBtnText: { ...T.fontMono, fontSize: 10, fontWeight: '800', color: T.warning },
 });

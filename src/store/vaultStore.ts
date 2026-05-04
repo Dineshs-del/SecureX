@@ -40,6 +40,8 @@ interface VaultState {
     avgScore: number;
     securityScore: number;
   };
+  autoLockEnabled: boolean;
+  autoLockDuration: number;
   checkSetup: () => Promise<void>;
   setup: (password: string) => Promise<boolean>;
   unlock: (password: string) => Promise<boolean>;
@@ -47,6 +49,7 @@ interface VaultState {
   lock: () => void;
   loadCredentials: () => Promise<void>;
   addCredential: (credential: Omit<VaultCredential, 'id' | 'createdAt' | 'lastAccessed'>) => Promise<string>;
+  bulkAddCredentials: (creds: Omit<VaultCredential, 'id' | 'createdAt' | 'lastAccessed'>[]) => Promise<number>;
   updateCredential: (id: string, credential: Partial<VaultCredential>) => Promise<void>;
   deleteCredential: (id: string) => Promise<void>;
   updateLastAccessed: (id: string) => Promise<void>;
@@ -128,10 +131,19 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   error: null,
   stats: { total: 0, weak: 0, breached: 0, reused: 0, avgScore: 0, securityScore: 0 },
   autofillEnabled: false,
+  autoLockEnabled: true,
+  autoLockDuration: 5,
 
   checkSetup: async () => {
     const isSetup = await MasterPasswordManager.isSetupComplete();
-    set({ isSetupComplete: isSetup, isUnlocked: MasterPasswordManager.isVaultUnlocked() });
+    const lockEnabled = await get().isAutoLockEnabled();
+    const lockDuration = await get().getAutoLockDuration();
+    set({ 
+      isSetupComplete: isSetup, 
+      isUnlocked: MasterPasswordManager.isVaultUnlocked(),
+      autoLockEnabled: lockEnabled,
+      autoLockDuration: lockDuration,
+    });
     if (MasterPasswordManager.isVaultUnlocked()) {
       await get().loadCredentials();
     }
@@ -201,6 +213,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
 
   setAutoLockEnabled: async (val: boolean) => {
     await AsyncStorage.setItem('securex_autolock_enabled', val ? 'true' : 'false');
+    set({ autoLockEnabled: val });
   },
 
   getAutoLockDuration: async () => {
@@ -210,6 +223,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
 
   setAutoLockDuration: async (val: number) => {
     await AsyncStorage.setItem('securex_autolock_duration', val.toString());
+    set({ autoLockDuration: val });
   },
 
   lock: () => {
@@ -303,6 +317,60 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     get().applyFilters();
     get().loadStats();
     return credential.id;
+  },
+
+  bulkAddCredentials: async (creds) => {
+    const now = new Date().toISOString();
+    const { credentials } = get();
+    const vKey = MasterPasswordManager.getVaultKey();
+    const newCredentials: VaultCredential[] = [];
+
+    for (const newCred of creds) {
+      const isDupe = credentials.some(c => 
+        (c.url.toLowerCase() === newCred.url.toLowerCase() || (c.url === '' && newCred.url === '')) &&
+        (c.username.toLowerCase() === newCred.username.toLowerCase() || (c.username === '' && newCred.username === '')) &&
+        (c.name.toLowerCase() === newCred.name.toLowerCase())
+      ) || newCredentials.some(c => 
+        (c.url.toLowerCase() === newCred.url.toLowerCase() || (c.url === '' && newCred.url === '')) &&
+        (c.username.toLowerCase() === newCred.username.toLowerCase() || (c.username === '' && newCred.username === '')) &&
+        (c.name.toLowerCase() === newCred.name.toLowerCase())
+      );
+
+      if (!isDupe) {
+        let favicon = '';
+        if (newCred.url) {
+          try {
+            const u = newCred.url.includes('://') ? newCred.url : `https://${newCred.url}`;
+            const hostname = u.split('/')[2] || u;
+            favicon = `https://www.google.com/s2/favicons?sz=128&domain=${hostname}`;
+          } catch (e) {}
+        }
+        newCredentials.push({
+          ...newCred,
+          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          favicon,
+          strength: getPasswordStrength(newCred.password),
+          breached: false,
+          createdAt: now,
+          lastAccessed: now,
+        });
+      }
+    }
+
+    if (newCredentials.length === 0) return 0;
+
+    const updated = [...credentials, ...newCredentials];
+    const storageUpdated = updated.map((c: any) => ({
+      ...c,
+      password: CryptoService.encryptedDataToString(CryptoService.encryptWithKey(c.password, vKey))
+    }));
+    
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(storageUpdated));
+    set({ credentials: updated });
+    get().applyFilters();
+    get().loadStats();
+    
+    return newCredentials.length;
   },
 
   updateCredential: async (id, changes) => {
@@ -411,7 +479,8 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     credentials.forEach(c => { passMap[c.password] = (passMap[c.password] || 0) + 1; });
     const reused = Object.values(passMap).filter((v: any) => v > 1).length;
 
-    const score = total === 0 ? 100 : Math.max(0, 100 - (weak * 10) - (breached * 20));
+    const strong = credentials.filter(c => c.strength === 'strong').length;
+    const score = total === 0 ? 100 : Math.round((strong / total) * 100);
     set({ stats: { total, weak, breached, reused, avgScore: 0, securityScore: score } });
   },
 

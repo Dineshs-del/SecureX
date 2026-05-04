@@ -127,6 +127,20 @@ export class MasterPasswordManager {
 }
 
   /**
+   * Verify master password without changing app state
+   */
+  static async verifyMasterPassword(password: string): Promise<boolean> {
+    try {
+      const salt = await AsyncStorage.getItem(KEYS.SALT);
+      const storedHash = await AsyncStorage.getItem(KEYS.MASTER_HASH);
+      if (salt === null || storedHash === null) return false;
+      return CryptoService.hashPassword(password, salt) === storedHash;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Change master password
    */
   static async changeMasterPassword(
