@@ -25,6 +25,7 @@ export interface VaultCredential {
 interface VaultState {
   isSetupComplete: boolean;
   isUnlocked: boolean;
+  isPasswordVerified: boolean;
   failedAttempts: number;
   credentials: VaultCredential[];
   filteredCredentials: VaultCredential[];
@@ -46,6 +47,8 @@ interface VaultState {
   setup: (password: string) => Promise<boolean>;
   unlock: (password: string) => Promise<boolean>;
   unlockWithBiometrics: () => Promise<boolean>;
+  verifyPassword: (password: string) => Promise<boolean>;
+  confirmUnlock: () => void;
   lock: () => void;
   loadCredentials: () => Promise<void>;
   addCredential: (credential: Omit<VaultCredential, 'id' | 'createdAt' | 'lastAccessed'>) => Promise<string>;
@@ -129,6 +132,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   selectedCategory: 'All',
   isLoading: false,
   error: null,
+  isPasswordVerified: false,
   stats: { total: 0, weak: 0, breached: 0, reused: 0, avgScore: 0, securityScore: 0 },
   autofillEnabled: false,
   autoLockEnabled: true,
@@ -162,19 +166,33 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   },
 
   unlock: async (password) => {
+    // Legacy unlock if someone calls it directly
+    const res = await get().verifyPassword(password);
+    if (res) {
+      get().confirmUnlock();
+      return true;
+    }
+    return false;
+  },
+
+  verifyPassword: async (password) => {
     const { failedAttempts } = get();
     if (failedAttempts >= 5) {
-      set({ isUnlocked: true, failedAttempts: 0, isLoading: false });
       set({ error: 'Too many attempts. Please restart the app.' });
       return false;
     }
     set({ isLoading: true, error: null });
+    
+    // Check password without immediately setting isUnlocked
     const result = await MasterPasswordManager.unlockVault(password);
     if (result.success) {
-      set({ isUnlocked: true, failedAttempts: 0, isLoading: false });
-      await get().loadCredentials();
+      set({ isPasswordVerified: true, failedAttempts: 0, isLoading: false });
       return true;
     }
+    
+    // Restore lock state since unlockVault caches the key
+    MasterPasswordManager.lockVault();
+    
     const newAttempts = failedAttempts + 1;
     set({
       failedAttempts: newAttempts,
@@ -184,12 +202,16 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     return false;
   },
 
+  confirmUnlock: async () => {
+    set({ isUnlocked: true, isPasswordVerified: false });
+    await get().loadCredentials();
+  },
+
   unlockWithBiometrics: async () => {
     set({ isLoading: true, error: null });
     const result = await MasterPasswordManager.unlockWithBiometrics();
     if (result.success) {
-      set({ isUnlocked: true, failedAttempts: 0, isLoading: false });
-      set({ isUnlocked: true, failedAttempts: 0, isLoading: false });
+      set({ isPasswordVerified: true, failedAttempts: 0, isLoading: false });
       await get().loadCredentials();
       return true;
     }
@@ -229,7 +251,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   lock: () => {
     MasterPasswordManager.lockVault();  
     NativeModules.AutofillModule?.clearVaultKey();
-    set({ isUnlocked: false, credentials: [], filteredCredentials: [] });
+    set({ isUnlocked: false, isPasswordVerified: false, credentials: [], filteredCredentials: [] });
   },
 
   loadCredentials: async () => {

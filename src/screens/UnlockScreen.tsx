@@ -20,7 +20,7 @@ export const UnlockScreen: React.FC = () => {
   const [isFocused, setIsFocused] = useState(false);
   
   const route = useRoute<any>();
-  const { unlock, unlockWithBiometrics, isBiometricEnabled, isLoading, error } = useVaultStore();
+  const { verifyPassword, unlockWithBiometrics, isBiometricEnabled, isLoading, error } = useVaultStore();
 
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [isLockout, setIsLockout] = useState(false);
@@ -90,7 +90,10 @@ export const UnlockScreen: React.FC = () => {
 
       if (success) {
         const unlockRes = await unlockWithBiometrics();
-        if (!unlockRes) {
+        if (unlockRes) {
+          const navigation = route.params?.navigation || require('@react-navigation/native').useNavigation();
+          navigation.navigate('FingerprintAuth');
+        } else {
           inputRef.current?.focus();
         }
       } else {
@@ -115,7 +118,12 @@ export const UnlockScreen: React.FC = () => {
 
   const handleUnlock = async () => {
     if (!password) return;
-    await unlock(password);
+    const isVerified = await verifyPassword(password);
+    if (isVerified) {
+      // Navigate to Fingerprint step
+      const navigation = route.params?.navigation || require('@react-navigation/native').useNavigation();
+      navigation.navigate('FingerprintAuth');
+    }
   };
 
   return (

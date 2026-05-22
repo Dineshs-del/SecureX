@@ -10,6 +10,7 @@ import { T } from '../theme/tokens';
 
 import { SetupScreen } from '../screens/SetupScreen';
 import { UnlockScreen } from '../screens/UnlockScreen';
+import { FingerprintAuthScreen } from '../screens/FingerprintAuthScreen';
 import { DashboardScreen } from '../screens/DashboardScreen';
 import { VaultScreen } from '../screens/VaultScreen';
 import { SecurityScreen } from '../screens/SecurityScreen';
@@ -141,7 +142,10 @@ export const AppNavigator: React.FC = () => {
         {!isSetupComplete ? (
           <Stack.Screen name="Setup" component={SetupScreen} />
         ) : !isUnlocked ? (
-          <Stack.Screen name="Unlock" component={UnlockScreen} />
+          <>
+            <Stack.Screen name="Unlock" component={UnlockScreen} />
+            <Stack.Screen name="FingerprintAuth" component={FingerprintAuthScreen} />
+          </>
         ) : (
           <>
             <Stack.Screen name="Dashboard" component={DashboardScreen} />
