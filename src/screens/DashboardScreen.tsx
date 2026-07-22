@@ -62,7 +62,7 @@ export const DashboardScreen: React.FC = () => {
   const accentColor = breached > 0 ? T.danger : (weak > 0 ? T.warning : T.success);
 
   // Recent 3 credentials
-  const recent = [...credentials].sort((a,b) => (b.lastAccessed || 0) - (a.lastAccessed || 0)).slice(0, 3);
+  const recent = [...credentials].sort((a, b) => b.lastAccessed.localeCompare(a.lastAccessed)).slice(0, 3);
 
   return (
     <SafeAreaView style={s.container}>

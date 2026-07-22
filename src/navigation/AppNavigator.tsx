@@ -11,6 +11,7 @@ import { T } from '../theme/tokens';
 import { SetupScreen } from '../screens/SetupScreen';
 import { UnlockScreen } from '../screens/UnlockScreen';
 import { FingerprintAuthScreen } from '../screens/FingerprintAuthScreen';
+import { EnrollFingerprintScreen } from '../screens/EnrollFingerprintScreen';
 import { DashboardScreen } from '../screens/DashboardScreen';
 import { VaultScreen } from '../screens/VaultScreen';
 import { SecurityScreen } from '../screens/SecurityScreen';
@@ -53,8 +54,8 @@ export const AppNavigator: React.FC = () => {
       if (!url) return;
       if (url.startsWith('securex://share')) {
         const urlObj = new URL(url.replace('securex://', 'http://securex.app/'));
-        const data = urlObj.searchParams.get('data');
-        const expires = urlObj.searchParams.get('expires');
+        const data = (urlObj.searchParams as any).get('data');
+        const expires = (urlObj.searchParams as any).get('expires');
 
         if (!data || !expires) return;
 
@@ -65,15 +66,10 @@ export const AppNavigator: React.FC = () => {
 
         try {
           // Decode B64
-          let decoded: string;
-          try {
-            decoded = atob(decodeURIComponent(data));
-          } catch {
-            decoded = CryptoJS.enc.Base64.parse(decodeURIComponent(data)).toString(CryptoJS.enc.Utf8);
-          }
+          const decoded = CryptoJS.enc.Base64.parse(decodeURIComponent(data)).toString(CryptoJS.enc.Utf8);
           
           if (navigationRef.isReady()) {
-            navigationRef.navigate('ShareReceive', { data: decoded });
+            (navigationRef as any).navigate('ShareReceive', { data: decoded });
           }
         } catch (e) {
           Alert.alert('Error', 'Failed to decode shared link data.');
@@ -165,6 +161,7 @@ export const AppNavigator: React.FC = () => {
             <Stack.Screen name="ImportExport" component={ImportExportScreen} />
             <Stack.Screen name="ActiveShares" component={ActiveSharesScreen} />
             <Stack.Screen name="ShareReceive" component={ShareReceiveScreen} />
+            <Stack.Screen name="EnrollFingerprint" component={EnrollFingerprintScreen} />
           </>
         )}
       </Stack.Navigator>

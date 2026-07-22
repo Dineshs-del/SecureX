@@ -138,6 +138,7 @@ export const SettingsScreen: React.FC = () => {
       desc: toggles.biometric ? `${biometryTypeLabel} active ✓` : biometryTypeLabel,             
       type: 'toggle', toggleKey: 'biometric' 
     },
+    { emoji: '📡', iconBg: T.cyanA12,          accentColor: T.cyan,      title: 'Hardware Fingerprint Setup', desc: 'Register fingerprint to ESP32 module',  type: 'nav' },
     { 
       emoji: '⏱️', iconBg: 'rgba(139,92,246,0.14)', accentColor: '#8b5cf6', 
       title: 'Auto-Lock Timeout',      
@@ -216,6 +217,8 @@ export const SettingsScreen: React.FC = () => {
               onPress={row.type === 'nav' ? () => {
                 if (row.title === 'Change Master Password') {
                   navigation.navigate('ChangePassword');
+                } else if (row.title === 'Hardware Fingerprint Setup') {
+                  navigation.navigate('EnrollFingerprint');
                 } else {
                   Alert.alert(row.title, `${row.title} coming soon.`);
                 }

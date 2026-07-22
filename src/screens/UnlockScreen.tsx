@@ -9,7 +9,7 @@ import ReactNativeBiometrics, { BiometryTypes } from 'react-native-biometrics';
 import { useVaultStore } from '../store/vaultStore';
 import { AppBackground } from '../components/AppBackground';
 import { T } from '../theme/tokens';
-import { useRoute } from '@react-navigation/native';
+import { useRoute, useNavigation } from '@react-navigation/native';
 import { MicroToast, MicroToastHandle } from '../components/MicroToast';
 
 const rnBiometrics = new ReactNativeBiometrics();
@@ -20,6 +20,7 @@ export const UnlockScreen: React.FC = () => {
   const [isFocused, setIsFocused] = useState(false);
   
   const route = useRoute<any>();
+  const navigation = useNavigation<any>();
   const { verifyPassword, unlockWithBiometrics, isBiometricEnabled, isLoading, error } = useVaultStore();
 
   const [biometricEnabled, setBiometricEnabled] = useState(false);
@@ -59,12 +60,12 @@ export const UnlockScreen: React.FC = () => {
         Animated.timing(glowAnim, {
           toValue: 0.4, duration: 1600,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
         Animated.timing(glowAnim, {
           toValue: 0.2, duration: 1600,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
       ]),
     ).start();
@@ -91,7 +92,6 @@ export const UnlockScreen: React.FC = () => {
       if (success) {
         const unlockRes = await unlockWithBiometrics();
         if (unlockRes) {
-          const navigation = route.params?.navigation || require('@react-navigation/native').useNavigation();
           navigation.navigate('FingerprintAuth');
         } else {
           inputRef.current?.focus();
@@ -121,7 +121,6 @@ export const UnlockScreen: React.FC = () => {
     const isVerified = await verifyPassword(password);
     if (isVerified) {
       // Navigate to Fingerprint step
-      const navigation = route.params?.navigation || require('@react-navigation/native').useNavigation();
       navigation.navigate('FingerprintAuth');
     }
   };
@@ -142,7 +141,7 @@ export const UnlockScreen: React.FC = () => {
           {/* ── 1. Lock Visual ── */}
           <Animated.View style={[s.lockSection, animStyle(a1)]}>
             {/* Pulsing ring - opacity only */}
-            <Animated.View style={[s.pulseRing, { shadowOpacity: glowAnim }]} />
+            <Animated.View style={[s.pulseRing, { opacity: glowAnim }]} />
             <View style={s.hexOuter}>
               <View style={s.hexInner}>
                 <Text style={s.lockEmoji}>🔒</Text>

@@ -49,12 +49,7 @@ export const ShareCreateModal: React.FC<Props> = ({ isVisible, credential, onClo
       
       const payloadStr = JSON.stringify(payloadObj);
       
-      let encodedPayload: string;
-      try {
-        encodedPayload = btoa(payloadStr);
-      } catch {
-        encodedPayload = CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(payloadStr));
-      }
+      const encodedPayload = CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(payloadStr));
       
       const shareUrl = `securex://share?data=${encodeURIComponent(encodedPayload)}&expires=${expiresAt}`;
 

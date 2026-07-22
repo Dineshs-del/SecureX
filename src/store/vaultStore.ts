@@ -22,6 +22,11 @@ export interface VaultCredential {
   lastAccessed: string;
 }
 
+export type NewVaultCredential = Omit<VaultCredential, 'id' | 'createdAt' | 'lastAccessed' | 'favicon' | 'strength'> & {
+  favicon?: string;
+  strength?: 'weak' | 'fair' | 'strong';
+};
+
 interface VaultState {
   isSetupComplete: boolean;
   isUnlocked: boolean;
@@ -51,8 +56,8 @@ interface VaultState {
   confirmUnlock: () => void;
   lock: () => void;
   loadCredentials: () => Promise<void>;
-  addCredential: (credential: Omit<VaultCredential, 'id' | 'createdAt' | 'lastAccessed'>) => Promise<string>;
-  bulkAddCredentials: (creds: Omit<VaultCredential, 'id' | 'createdAt' | 'lastAccessed'>[]) => Promise<number>;
+  addCredential: (credential: NewVaultCredential) => Promise<string>;
+  bulkAddCredentials: (creds: NewVaultCredential[]) => Promise<number>;
   updateCredential: (id: string, credential: Partial<VaultCredential>) => Promise<void>;
   deleteCredential: (id: string) => Promise<void>;
   updateLastAccessed: (id: string) => Promise<void>;

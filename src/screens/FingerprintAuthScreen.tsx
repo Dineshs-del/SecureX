@@ -1,16 +1,18 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, TouchableOpacity,
-  Animated, Easing, ActivityIndicator
+  Animated, Easing, ActivityIndicator, Alert
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { T } from '../theme/tokens';
 import { useVaultStore } from '../store/vaultStore';
 import { AppBackground } from '../components/AppBackground';
-
-// In a real app, import 'react-native-ble-plx' or 'react-native-ble-manager'
-// import { BleManager, Device } from 'react-native-ble-plx';
-// const bleManager = new BleManager();
+import { 
+  connectToVaultGuard, 
+  requestVaultGuardAuth, 
+  disconnectVaultGuard, 
+  VaultGuardAuthResult 
+} from '../services/VaultGuardBLE';
 
 export const FingerprintAuthScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -21,9 +23,6 @@ export const FingerprintAuthScreen: React.FC = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [lockMessage, setLockMessage] = useState<string | null>(null);
 
-  // For Demo simulation
-  const [demoFailedAttempts, setDemoFailedAttempts] = useState(0);
-
   const glowAnim = useRef(new Animated.Value(0.1)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -32,16 +31,16 @@ export const FingerprintAuthScreen: React.FC = () => {
     Animated.loop(
       Animated.sequence([
         Animated.timing(glowAnim, {
-          toValue: 0.5,
+          toValue: 1,
           duration: 1500,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
         Animated.timing(glowAnim, {
-          toValue: 0.1,
+          toValue: 0.2,
           duration: 1500,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
       ])
     ).start();
@@ -64,65 +63,72 @@ export const FingerprintAuthScreen: React.FC = () => {
       ])
     ).start();
 
-    // Mock connection
-    const connectTimer = setTimeout(() => {
-      setStatus('ESP32 Connected. Ready.');
-      setDeviceConnected(true);
-    }, 2000);
+    // Actual BLE connection
+    let isMounted = true;
+    const initBLE = async () => {
+      const connected = await connectToVaultGuard();
+      if (isMounted) {
+        if (connected) {
+          setStatus('ESP32 Connected. Ready.');
+          setDeviceConnected(true);
+        } else {
+          setStatus('Failed to connect to VaultGuard.');
+          Alert.alert('Connection Failed', 'Make sure your ESP32 is powered on and near the device.');
+        }
+      }
+    };
 
-    return () => clearTimeout(connectTimer);
+    initBLE();
+
+    return () => {
+      isMounted = false;
+      disconnectVaultGuard();
+    };
   }, []);
 
-  const sendScanRequest = () => {
+  const sendScanRequest = async () => {
     if (!deviceConnected) return;
     setStatus('Scanning fingerprint...');
     setIsScanning(true);
+    setLockMessage(null);
 
-    // MOCK BLE COMMUNICATION (Simulating ESP32 response for demo presentation)
-    // In actual implementation: bleManager.writeCharacteristicWithResponseForDevice(...)
-  };
-
-  // Demo Handlers (Simulate Hardware Responses)
-  const simulateEsp32Response = (responseType: 'GRANTED' | 'DENIED' | 'TEMP_LOCK' | 'PERM_LOCK') => {
-    if (responseType === 'GRANTED') {
+    const result: VaultGuardAuthResult = await requestVaultGuardAuth();
+    
+    if (result === 'GRANTED') {
       setStatus('Access Granted!');
       setTimeout(() => {
-        confirmUnlock(); // This transitions to Dashboard
+        confirmUnlock(); // Transitions to Dashboard
       }, 1000);
-    } else if (responseType === 'DENIED') {
-      const newAttempts = demoFailedAttempts + 1;
-      setDemoFailedAttempts(newAttempts);
-      setStatus(`Access Denied! Attempt ${newAttempts}`);
+    } else if (result === 'DENIED') {
+      setStatus('Access Denied! Fingerprint not recognized.');
       setIsScanning(false);
-      
-      if (newAttempts === 3) {
-        simulateEsp32Response('TEMP_LOCK');
-      } else if (newAttempts >= 6) {
-        simulateEsp32Response('PERM_LOCK');
-      }
-    } else if (responseType === 'TEMP_LOCK') {
-      setLockMessage("APP TEMPORARILY LOCKED\nLocked for 5 hours (10s demo)");
+    } else if (result === 'LOCKED_TEMP') {
+      setLockMessage("APP TEMPORARILY LOCKED\nToo many failed attempts.");
       setStatus('Device Locked');
       setIsScanning(false);
-      setTimeout(() => {
-        setLockMessage(null);
-        setStatus('ESP32 Connected. Ready.');
-      }, 10000); // 10 sec demo lock
-    } else if (responseType === 'PERM_LOCK') {
-      setLockMessage("APP PERMANENTLY LOCKED\nPlease contact support.");
+    } else if (result === 'LOCKED_PERM' || result === 'LOCKED') {
+      setLockMessage("APP PERMANENTLY LOCKED\nPlease contact support or use Master Password.");
       setStatus('Device Locked');
       setIsScanning(false);
-      setTimeout(() => {
-        setLockMessage(null);
-        setStatus('ESP32 Connected. Ready.');
-        setDemoFailedAttempts(0);
-      }, 5000); // 5 sec demo reset
+    } else if (result === 'TIMEOUT') {
+      setStatus('Scan Timeout. Please try again.');
+      setIsScanning(false);
+    } else if (result === 'NOT_FOUND') {
+      setStatus('Device disconnected or error occurred.');
+      setDeviceConnected(false);
+      setIsScanning(false);
     }
   };
 
   const handleCancel = () => {
+    disconnectVaultGuard();
     lock(); // Completely lock vault again
     navigation.goBack();
+  };
+
+  const handleSkip = () => {
+    disconnectVaultGuard();
+    confirmUnlock(); // Unlock the vault and proceed to Dashboard
   };
 
   return (
@@ -139,12 +145,10 @@ export const FingerprintAuthScreen: React.FC = () => {
             style={[
               s.pulseRing, 
               { 
-                shadowOpacity: glowAnim,
+                opacity: glowAnim,
                 transform: [{ scale: pulseAnim }],
                 borderColor: status.includes('Granted') ? T.success : 
                              status.includes('Denied') || status.includes('Locked') ? T.danger : T.cyanA18,
-                shadowColor: status.includes('Granted') ? T.success : 
-                             status.includes('Denied') || status.includes('Locked') ? T.danger : T.cyan,
               }
             ]} 
           />
@@ -170,8 +174,22 @@ export const FingerprintAuthScreen: React.FC = () => {
             <TouchableOpacity style={s.scanBtn} onPress={sendScanRequest}>
               <Text style={s.scanBtnText}>Request Scan</Text>
             </TouchableOpacity>
-          ) : !deviceConnected ? (
+          ) : !deviceConnected && status.includes('Connecting') ? (
             <ActivityIndicator color={T.cyan} size="large" />
+          ) : !deviceConnected && status.includes('Failed') ? (
+            <TouchableOpacity style={s.scanBtn} onPress={() => {
+              setStatus('Connecting to ESP32...');
+              connectToVaultGuard().then(connected => {
+                if (connected) {
+                  setStatus('ESP32 Connected. Ready.');
+                  setDeviceConnected(true);
+                } else {
+                  setStatus('Failed to connect to VaultGuard.');
+                }
+              });
+            }}>
+              <Text style={s.scanBtnText}>Retry Connection</Text>
+            </TouchableOpacity>
           ) : null}
 
           {lockMessage ? (
@@ -187,20 +205,10 @@ export const FingerprintAuthScreen: React.FC = () => {
           )}
         </View>
 
-        {/* DEMO CONTROLS (Simulating ESP32 responses directly for presentation) */}
-        {isScanning && !lockMessage && (
-           <View style={s.demoControls}>
-             <Text style={s.demoTitle}>Hardware Simulation (Demo)</Text>
-             <View style={s.demoRow}>
-               <TouchableOpacity style={[s.demoBtn, { borderColor: T.success }]} onPress={() => simulateEsp32Response('GRANTED')}>
-                 <Text style={[s.demoBtnText, { color: T.success }]}>Match</Text>
-               </TouchableOpacity>
-               <TouchableOpacity style={[s.demoBtn, { borderColor: T.danger }]} onPress={() => simulateEsp32Response('DENIED')}>
-                 <Text style={[s.demoBtnText, { color: T.danger }]}>Mismatch</Text>
-               </TouchableOpacity>
-             </View>
-           </View>
-        )}
+        {/* Skip Hardware Auth — for when no fingerprint is enrolled */}
+        <TouchableOpacity style={s.skipBtn} onPress={handleSkip}>
+          <Text style={s.skipBtnText}>Skip → Use Password Only</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity style={s.cancelBtn} onPress={handleCancel}>
           <Text style={s.cancelBtnText}>Cancel & Lock</Text>
@@ -247,16 +255,15 @@ const s = StyleSheet.create({
   },
   scanBtnText: { ...T.fontBody, color: T.cyan, fontWeight: '800' },
 
-  cancelBtn: { marginTop: 40, padding: 12 },
-  cancelBtnText: { ...T.fontCaption, color: T.muted },
-
-  demoControls: {
-    marginTop: 20, padding: 16, borderRadius: T.rCard,
-    backgroundColor: 'rgba(255,255,255,0.02)', borderWidth: 1, borderColor: T.border,
-    width: '100%', alignItems: 'center'
+  skipBtn: {
+    marginTop: 24,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: T.rPill,
+    paddingHorizontal: 28, paddingVertical: 12,
   },
-  demoTitle: { ...T.fontCaption, color: T.faint, marginBottom: 12 },
-  demoRow: { flexDirection: 'row', gap: 16 },
-  demoBtn: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: T.rPill, borderWidth: 1 },
-  demoBtnText: { ...T.fontBody, fontWeight: '700' }
+  skipBtnText: { ...T.fontBody, color: T.muted, fontWeight: '600', fontSize: 14 },
+
+  cancelBtn: { marginTop: 16, padding: 12 },
+  cancelBtnText: { ...T.fontCaption, color: T.muted },
 });
