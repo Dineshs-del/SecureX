@@ -11,7 +11,7 @@ import {
   Modal,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import DocumentPicker from 'react-native-document-picker';
+import { pick, types, errorCodes, isErrorWithCode } from '@react-native-documents/picker';
 import RNFS from 'react-native-fs';
 import Svg, { Path } from 'react-native-svg';
 import { useVaultStore } from '../store/vaultStore';
@@ -59,9 +59,11 @@ export const ImportExportScreen: React.FC = () => {
 
   const pickFile = async () => {
     try {
-      const res = await DocumentPicker.pickSingle({
-        type: [DocumentPicker.types.allFiles, DocumentPicker.types.plainText, DocumentPicker.types.csv],
+      const [res] = await pick({
+        type: [types.allFiles],
+        allowMultiSelection: false,
       });
+      if (!res) return;
       const content = await RNFS.readFile(res.uri, 'utf8');
       const trimmed = content.trimStart();
       const fileName = res.name || 'backup';
@@ -107,7 +109,7 @@ export const ImportExportScreen: React.FC = () => {
       setStats({ new: newItems.length, duplicates: duplicates.length, skipped });
       setPreviewItems(newItems);
     } catch (err: any) {
-      if (!DocumentPicker.isCancel(err)) {
+      if (!(isErrorWithCode(err) && err.code === errorCodes.OPERATION_CANCELED)) {
         toastRef.current?.show('Error reading file or unrecognised format', 'error');
       }
     }

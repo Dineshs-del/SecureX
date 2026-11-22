@@ -7,7 +7,7 @@
 import { Alert, PermissionsAndroid, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNFS from 'react-native-fs';
-import DocumentPicker, { types } from 'react-native-document-picker';
+import { pick, types, errorCodes, isErrorWithCode } from '@react-native-documents/picker';
 import { parseCSV } from './csvParser';
 import { normalizeRow, extractHostname } from './credentialNormalizer';
 import { useVaultStore, VaultCredential } from '../store/vaultStore';
@@ -164,15 +164,19 @@ export const VaultImportExport = {
   // ────────────────────────────────────────────────────────────────────────
   pickImportFile: async (): Promise<{ uri: string; name: string } | null> => {
     try {
-      const result = await DocumentPicker.pickSingle({
+      const [result] = await pick({
         type: [types.allFiles],
+        allowMultiSelection: false,
       });
+      if (!result) return null;
       return {
         uri: result.uri,
         name: result.name ?? result.uri.split('/').pop() ?? 'backup',
       };
     } catch (err) {
-      if (DocumentPicker.isCancel(err)) return null;
+      if (isErrorWithCode(err) && err.code === errorCodes.OPERATION_CANCELED) {
+        return null;
+      }
       throw err;
     }
   },
