@@ -1,14 +1,12 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  SafeAreaView, StatusBar, Animated, ActivityIndicator, TextInput,
+  SafeAreaView, StatusBar, ActivityIndicator, TextInput,
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
-import { MasterPasswordManager } from '../theme/database/MasterPasswordManager';
-import { CryptoService } from '../theme/crypto/CryptoService';
+import { MIN_MASTER_PASSWORD_LENGTH } from '../theme/database/MasterPasswordManager';
 import { useVaultStore, getPasswordStrength } from '../store/vaultStore';
 import { AppBackground } from '../components/AppBackground';
 import { T } from '../theme/tokens';
@@ -46,7 +44,7 @@ const LocalGlassInput = ({ emoji, label, placeholder, value, onChangeText, error
 export const ChangePasswordScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
-  const { lock } = useVaultStore();
+  const { lock, changeMasterPassword } = useVaultStore();
   const toastRef = useRef<MicroToastHandle>(null);
 
   const [currentPass, setCurrentPass] = useState('');
@@ -67,9 +65,11 @@ export const ChangePasswordScreen: React.FC = () => {
   const handleUpdate = async () => {
     const newErrors: Record<string, string> = {};
     if (!currentPass) newErrors.current = 'Required';
-    if (newPass.length < 8) newErrors.new = 'Password must be at least 8 characters';
+    if (newPass.length < MIN_MASTER_PASSWORD_LENGTH) {
+      newErrors.new = `Password must be at least ${MIN_MASTER_PASSWORD_LENGTH} characters`;
+    }
     if (newPass !== confirmPass) newErrors.confirm = 'Passwords do not match';
-    
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -79,66 +79,23 @@ export const ChangePasswordScreen: React.FC = () => {
     setErrors({});
 
     try {
-      // 1. Verify current password
-      const unlockResult = await MasterPasswordManager.unlockVault(currentPass);
-      if (!unlockResult.success) {
-        setErrors({ current: 'Incorrect current password' });
+      const res = await changeMasterPassword(currentPass, newPass);
+      if (!res.success) {
+        if (res.error?.toLowerCase().includes('current')) {
+          setErrors({ current: res.error });
+        } else {
+          toastRef.current?.show(res.error || 'Failed to update password', 'error');
+        }
         setIsUpdating(false);
         return;
       }
 
-      const oldVaultKey = MasterPasswordManager.getVaultKey();
-
-      // 2. Perform Re-encryption Loop
-      // Load raw credentials
-      const STORAGE_KEY = 'securex_credentials';
-      const rawData = await AsyncStorage.getItem(STORAGE_KEY);
-      const credentials = rawData ? JSON.parse(rawData) : [];
-
-      // Decrypt all using OLD key
-      const decryptedData = credentials.map((c: any) => {
-        let plain = c.password;
-        if (c.password.startsWith('{')) {
-          const enc = CryptoService.stringToEncryptedData(c.password);
-          if (enc) {
-            const dec = CryptoService.decryptWithKey(enc, oldVaultKey);
-            if (dec) plain = dec;
-          }
-        }
-        return { ...c, password: plain };
-      });
-
-      // 3. Update Master Password
-      // This changes the key in MasterPasswordManager and AsyncStorage
-      const updateResult = await MasterPasswordManager.changeMasterPassword(currentPass, newPass);
-      if (!updateResult.success) {
-        throw new Error(updateResult.error || 'Failed to update master password');
-      }
-
-      const newVaultKey = MasterPasswordManager.getVaultKey();
-
-      // 4. Re-encrypt using NEW key
-      const reEncryptedData = decryptedData.map((c: any) => ({
-        ...c,
-        password: CryptoService.encryptedDataToString(CryptoService.encryptWithKey(c.password, newVaultKey))
-      }));
-
-      // 5. Save back to AsyncStorage
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(reEncryptedData));
-
-      // 6. Success Flow
-      toastRef.current?.show('✓ Master password updated');
-      
+      toastRef.current?.show('Master password updated & vault re-encrypted', 'success');
       setTimeout(() => {
-        lock(); // Clear memory
-        navigation.navigate('Unlock', { message: 'Password updated — please sign in again' });
-      }, 1500);
-
-    } catch (e: any) {
-      console.error('Update failed:', e);
-      // Rollback attempt (Simplified for this version - ideally we'd restore old hash/salt)
-      // For now, inform user of the serious error
-      toastRef.current?.show('❌ Failed to update — please try again');
+        lock();
+      }, 1200);
+    } catch {
+      toastRef.current?.show('Failed to update — please try again', 'error');
       setIsUpdating(false);
     }
   };

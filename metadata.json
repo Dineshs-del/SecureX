@@ -1,0 +1,6 @@
+{
+  "name": "SecureX - AI Password Manager & Security Vault",
+  "description": "Zero-knowledge encrypted password manager with multi-vault security, AI password generator, breach monitoring, and encrypted sharing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -4,15 +4,15 @@
 // (Chrome, Bitwarden, 1Password, generic).
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { Alert, Share, PermissionsAndroid, Platform } from 'react-native';
+import { Alert, PermissionsAndroid, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNFS from 'react-native-fs';
 import DocumentPicker, { types } from 'react-native-document-picker';
 import { parseCSV } from './csvParser';
+import { normalizeRow, extractHostname } from './credentialNormalizer';
 import { useVaultStore, VaultCredential } from '../store/vaultStore';
-import { useIdentityStore } from '../store/Identityvault';
-import { useBankCardStore } from '../store/BankCardVault';
-import { useSecureNotesStore } from '../store/OtherVaults';
 import { CryptoService, EncryptedData } from '../theme/crypto/CryptoService';
+import { MasterPasswordManager } from '../theme/database/MasterPasswordManager';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -20,8 +20,10 @@ import { CryptoService, EncryptedData } from '../theme/crypto/CryptoService';
 
 /** A normalized credential ready for preview / insertion */
 export interface NormalizedItem {
+  id?: string;
   name: string;
   url: string;
+  androidPackage?: string;
   username: string;
   password: string;
   category: string;
@@ -57,102 +59,98 @@ function isSecureXEncryptedData(obj: unknown): obj is EncryptedData {
   );
 }
 
-/** Pick the best header value from a CSV row using a list of candidate names */
-function pickField(
-  row: Record<string, string>,
-  candidates: string[],
-): string {
-  for (const key of candidates) {
-    if (row[key] !== undefined && row[key].trim() !== '') {
-      return row[key].trim();
-    }
-  }
-  return '';
-}
+
 
 /** Map raw CSV rows to NormalizedItems, auto-detecting Chrome / Bitwarden / 1Password / generic */
 function csvRowsToItems(rows: Record<string, string>[]): NormalizedItem[] {
   if (rows.length === 0) return [];
+  const items: NormalizedItem[] = [];
 
-  const headers = Object.keys(rows[0]);
-
-  const isBitwarden =
-    headers.includes('login_uri') || headers.includes('login_username') || headers.includes('login_password');
-  const is1Password =
-    headers.includes('Title') && headers.includes('Url') && headers.includes('Username') && headers.includes('Password');
-
-  return rows
-    .map((row): NormalizedItem | null => {
-      let name: string;
-      let url: string;
-      let username: string;
-      let password: string;
-      let notes: string;
-      let totp: string;
-
-      if (isBitwarden) {
-        name = pickField(row, ['name', 'Name']);
-        url = pickField(row, ['login_uri', 'url', 'URL']);
-        username = pickField(row, ['login_username', 'username', 'Username']);
-        password = pickField(row, ['login_password', 'password']);
-        notes = pickField(row, ['notes', 'Notes']);
-        totp = pickField(row, ['login_totp', 'totp']);
-      } else if (is1Password) {
-        name = pickField(row, ['Title', 'name']);
-        url = pickField(row, ['Url', 'url', 'website', 'Website']);
-        username = pickField(row, ['Username', 'username']);
-        password = pickField(row, ['Password', 'password']);
-        notes = pickField(row, ['Notes', 'notes']);
-        totp = pickField(row, ['OTPAuth', 'totp']);
-      } else {
-        // Chrome CSV or generic
-        name = pickField(row, ['name', 'Name', 'title', 'Title', 'site']);
-        // Fuzzy URL match: any header containing 'url', 'uri', 'site', 'web'
-        const urlKey =
-          headers.find(h => /url|uri|site|web/i.test(h)) ?? '';
-        url = pickField(row, ['url', 'URL', urlKey]);
-        username = pickField(row, ['username', 'Username', 'email', 'Email', 'login']);
-        password = pickField(row, ['password', 'Password', 'pass']);
-        notes = pickField(row, ['notes', 'Notes', 'note']);
-        totp = pickField(row, ['totp', 'otp', 'one_time_password']);
+  for (const row of rows) {
+    const getVal = (candidates: string[]): string => {
+      for (const [k, v] of Object.entries(row)) {
+        const cleanK = k.toLowerCase().trim().replace(/["\r]/g, '');
+        for (const c of candidates) {
+          if (cleanK === c.toLowerCase()) {
+            if (v && typeof v === 'string' && v.trim()) return v.trim();
+          }
+        }
       }
+      for (const [k, v] of Object.entries(row)) {
+        const cleanK = k.toLowerCase().trim().replace(/["\r]/g, '');
+        for (const c of candidates) {
+          if (cleanK.includes(c.toLowerCase())) {
+            if (v && typeof v === 'string' && v.trim()) return v.trim();
+          }
+        }
+      }
+      return '';
+    };
 
-      if (!password) return null; // skip rows without a password
+    const name = getVal(['name', 'title', 'site', 'service', 'application', 'account']);
+    const url = getVal(['url', 'login_uri', 'website', 'uri', 'login_url', 'web', 'link']);
+    const username = getVal(['username', 'login_username', 'login', 'email', 'user']);
+    const password = getVal(['password', 'login_password', 'pass', 'secret']);
+    const notes = getVal(['note', 'notes', 'comment', 'comments']);
+    const totp = getVal(['totp', 'otp', 'otpauth', 'one_time_password']);
 
-      return {
-        name: name || url || 'Imported Entry',
-        url,
-        username,
-        password,
-        category: 'General',
-        notes,
+    const norm = normalizeRow(name, url, username, password, notes);
+    if (norm) {
+      items.push({
+        id: norm.id,
+        name: norm.name,
+        url: norm.url,
+        androidPackage: norm.androidPackage,
+        username: norm.username,
+        password: norm.password,
+        category: norm.category,
+        notes: norm.notes,
         totp,
-      };
-    })
-    .filter((item): item is NormalizedItem => item !== null);
+      });
+    }
+  }
+
+  return items;
 }
 
-/** Filter out items that already exist in the vault (url + username match) */
+/** Filter out items that already exist in the vault (normalized host/package + username match) */
 function deduplicateItems(items: NormalizedItem[]): {
   toAdd: NormalizedItem[];
   skipped: number;
 } {
   const existing = useVaultStore.getState().credentials;
   const existingKeys = new Set(
-    existing.map(c => `${c.url.toLowerCase()}::${c.username.toLowerCase()}`),
+    existing.map(c => {
+      const host = c.androidPackage
+        ? `pkg:${c.androidPackage.toLowerCase()}`
+        : (c.url ? `host:${extractHostname(c.url)}` : `name:${c.name.toLowerCase().trim()}`);
+      return `${host}::${(c.username || '').toLowerCase().trim()}`;
+    })
   );
 
-  const toAdd: NormalizedItem[] = [];
-  const batchKeys = new Set<string>();
+  const batchMap = new Map<string, NormalizedItem>();
 
   for (const item of items) {
-    const key = `${item.url.toLowerCase()}::${item.username.toLowerCase()}`;
-    if (!existingKeys.has(key) && !batchKeys.has(key)) {
-      toAdd.push(item);
-      batchKeys.add(key);
+    const host = item.androidPackage
+      ? `pkg:${item.androidPackage.toLowerCase()}`
+      : (item.url ? `host:${extractHostname(item.url)}` : `name:${item.name.toLowerCase().trim()}`);
+    const key = `${host}::${(item.username || '').toLowerCase().trim()}`;
+
+    if (existingKeys.has(key)) {
+      continue;
+    }
+
+    if (batchMap.has(key)) {
+      const current = batchMap.get(key)!;
+      if (!current.password && item.password) {
+        batchMap.set(key, item);
+      }
+    } else {
+      batchMap.set(key, item);
     }
   }
 
+  const toAdd = Array.from(batchMap.values());
   return { toAdd, skipped: items.length - toAdd.length };
 }
 
@@ -201,14 +199,14 @@ export const VaultImportExport = {
     const isCsvExtension = filename.endsWith('.csv');
     const trimmedContent = content.trimStart();
 
-    // Try to parse as SecureX JSON if extension is .json and content looks like JSON
-    if (isJsonExtension && trimmedContent.startsWith('{')) {
+    // Try to parse as SecureX JSON whenever content starts with '{' (Android content:// URIs often omit .json)
+    if (isJsonExtension || trimmedContent.startsWith('{')) {
       let parsed: unknown;
       try {
         parsed = JSON.parse(content);
       } catch {
         throw new Error(
-          'The file has a .json extension but is not valid JSON.',
+          'The selected file is not valid JSON.',
         );
       }
 
@@ -246,11 +244,13 @@ export const VaultImportExport = {
         }
 
         const items: NormalizedItem[] = backupPayload.credentials.map(c => ({
+          id: c.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           name: c.name ?? 'Imported Entry',
           url: c.url ?? '',
+          androidPackage: c.androidPackage,
           username: c.username ?? '',
           password: c.password ?? '',
-          category: c.category ?? 'General',
+          category: c.category ?? 'Web',
           notes: c.notes ?? '',
           totp: c.totp ?? '',
         }));
@@ -319,19 +319,12 @@ export const VaultImportExport = {
         }
       }
 
-      // 2. Gather vault data
       const credentials = useVaultStore.getState().credentials;
-      const identities = useIdentityStore.getState().docs;
-      const bankCards = useBankCardStore.getState().cards;
-      const secureNotes = useSecureNotesStore.getState().notes;
 
       const payload = {
         version: '1.0',
         exportedAt: new Date().toISOString(),
         credentials,
-        identities,
-        bankCards,
-        secureNotes,
       };
 
       // 3. Encrypt data
@@ -372,6 +365,122 @@ export const VaultImportExport = {
       } catch {}
       
       return false;
+    }
+  },
+
+  // ────────────────────────────────────────────────────────────────────────
+  // CLEAN EXISTING VAULT
+  // Normalizes credentials, cleans URLs, android packages, removes duplicates,
+  // and takes an encrypted backup first.
+  // ────────────────────────────────────────────────────────────────────────
+  cleanExistingVault: async (masterPassword: string): Promise<{
+    success: boolean;
+    normalizedCount: number;
+    duplicatesRemoved: number;
+    error?: string;
+  }> => {
+    try {
+      // 1. Verify master password
+      const isValid = await MasterPasswordManager.verifyMasterPassword(masterPassword);
+      if (!isValid) {
+        return { success: false, normalizedCount: 0, duplicatesRemoved: 0, error: 'Incorrect Master Password' };
+      }
+
+      // 2. Take encrypted backup first
+      const backupOk = await VaultImportExport.exportVault(masterPassword);
+      if (!backupOk) {
+        return { success: false, normalizedCount: 0, duplicatesRemoved: 0, error: 'Encrypted backup failed. Aborting clean operation to protect your data.' };
+      }
+
+      // 3. Gather credentials and clean
+      const currentCredentials = useVaultStore.getState().credentials;
+      if (currentCredentials.length === 0) {
+        return { success: true, normalizedCount: 0, duplicatesRemoved: 0 };
+      }
+
+      const uniqueMap = new Map<string, VaultCredential>();
+      let duplicatesRemoved = 0;
+      let normalizedCount = 0;
+
+      for (const cred of currentCredentials) {
+        const norm = normalizeRow(
+          cred.name,
+          cred.url,
+          cred.username,
+          cred.password,
+          cred.notes,
+          cred.category
+        );
+
+        if (!norm) continue;
+
+        const hostKey = norm.androidPackage
+          ? `pkg:${norm.androidPackage.toLowerCase()}`
+          : (norm.url ? `host:${extractHostname(norm.url)}` : `name:${norm.name.toLowerCase().trim()}`);
+        const userKey = (norm.username || '').toLowerCase().trim();
+        const key = `${hostKey}::${userKey}`;
+
+        const wasModified =
+          cred.name !== norm.name ||
+          cred.url !== norm.url ||
+          cred.androidPackage !== norm.androidPackage;
+
+        if (wasModified) {
+          normalizedCount++;
+        }
+
+        if (uniqueMap.has(key)) {
+          duplicatesRemoved++;
+          const existing = uniqueMap.get(key)!;
+          // Prefer entry with password or longer notes
+          if (!existing.password && norm.password) {
+            uniqueMap.set(key, {
+              ...cred,
+              name: norm.name,
+              url: norm.url,
+              androidPackage: norm.androidPackage,
+              username: norm.username,
+              password: norm.password,
+              category: norm.category,
+              notes: norm.notes,
+            });
+          }
+        } else {
+          uniqueMap.set(key, {
+            ...cred,
+            name: norm.name,
+            url: norm.url,
+            androidPackage: norm.androidPackage,
+            username: norm.username,
+            password: norm.password,
+            category: norm.category,
+            notes: norm.notes,
+          });
+        }
+      }
+
+      const cleanedList = Array.from(uniqueMap.values());
+      const vKey = MasterPasswordManager.getVaultKey();
+      const storageUpdated = cleanedList.map((c: any) => ({
+        ...c,
+        password: CryptoService.encryptedDataToString(CryptoService.encryptWithKey(c.password, vKey)),
+      }));
+
+      await AsyncStorage.setItem('securex_credentials', JSON.stringify(storageUpdated));
+      await useVaultStore.getState().loadCredentials();
+
+      return {
+        success: true,
+        normalizedCount,
+        duplicatesRemoved,
+      };
+    } catch (e: any) {
+      return {
+        success: false,
+        normalizedCount: 0,
+        duplicatesRemoved: 0,
+        error: e.message || 'Failed to clean vault',
+      };
     }
   },
 };

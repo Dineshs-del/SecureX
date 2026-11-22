@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
-import { T } from '../theme/tokens';
 
 const { width, height } = Dimensions.get('window');
 

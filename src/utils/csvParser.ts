@@ -100,3 +100,48 @@ export function parseCSV(raw: string): Record<string, string>[] {
 function fieldsAreEmpty(fields: string[]): boolean {
     return fields.every(f => f.trim() === '');
 }
+
+import { normalizeRow, NormalizedRow } from './credentialNormalizer';
+
+export function parseCSVToCredentials(raw: string): NormalizedRow[] {
+  const rows = parseCSV(raw);
+  const results: NormalizedRow[] = [];
+
+  for (const row of rows) {
+    const getVal = (candidates: string[]): string => {
+      for (const [k, v] of Object.entries(row)) {
+        const cleanK = k.toLowerCase().trim().replace(/["\r]/g, '');
+        for (const c of candidates) {
+          if (cleanK === c.toLowerCase()) {
+            if (v && typeof v === 'string' && v.trim()) return v.trim();
+          }
+        }
+      }
+      // Second pass: partial match
+      for (const [k, v] of Object.entries(row)) {
+        const cleanK = k.toLowerCase().trim().replace(/["\r]/g, '');
+        for (const c of candidates) {
+          if (cleanK.includes(c.toLowerCase())) {
+            if (v && typeof v === 'string' && v.trim()) return v.trim();
+          }
+        }
+      }
+      return '';
+    };
+
+    // Match Chrome / Bitwarden / 1Password / Generic columns by header name, never by position
+    const name = getVal(['name', 'title', 'site', 'service', 'application', 'account']);
+    const url = getVal(['url', 'login_uri', 'website', 'uri', 'login_url', 'web', 'link']);
+    const username = getVal(['username', 'login_username', 'login', 'email', 'user']);
+    const password = getVal(['password', 'login_password', 'pass', 'secret']);
+    const notes = getVal(['note', 'notes', 'comment', 'comments']);
+
+    const norm = normalizeRow(name, url, username, password, notes);
+    if (norm) {
+      results.push(norm);
+    }
+  }
+
+  return results;
+}
+

@@ -13,6 +13,8 @@ export interface GeneratorOptions {
   includeSymbols?: boolean;
   accountType?: AccountType;
   mode?: 'password' | 'passphrase';
+  wordCount?: number;
+  separator?: string;
 }
 
 // EFF wordlist (shortened for mobile)
@@ -46,7 +48,7 @@ export class PasswordGenerator {
     const config = { ...profile, ...options };
 
     if (config.mode === 'passphrase') {
-      return this.generatePassphrase();
+      return this.generatePassphrase(config.wordCount, config.separator);
     }
 
     return this.generatePassword(config);
@@ -79,13 +81,13 @@ export class PasswordGenerator {
    * Generates a memorable passphrase (e.g. "tiger-maple-frost-42")
    * More memorable AND stronger than most passwords
    */
-  static generatePassphrase(wordCount: number = 4): string {
+  static generatePassphrase(wordCount: number = 4, separator: string = '-'): string {
     const words: string[] = [];
     for (let i = 0; i < wordCount; i++) {
       words.push(WORDLIST[Math.floor(Math.random() * WORDLIST.length)]);
     }
     const number = Math.floor(Math.random() * 99) + 1;
-    return [...words, number.toString()].join('-');
+    return [...words, number.toString()].join(separator);
   }
 
   /**

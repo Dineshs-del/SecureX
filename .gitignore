@@ -66,6 +66,13 @@ yarn-error.log
 # testing
 /coverage
 
+# Build and cache artifacts
+dist/
+.bundle/
+.expo/
+ts_errors*.txt
+structure.txt
+
 # Yarn
 .yarn/*
 !.yarn/patches

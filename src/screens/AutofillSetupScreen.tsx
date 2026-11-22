@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, ScrollView,
   TouchableOpacity, Linking, AppState, AppStateStatus,
-  StatusBar,
+  StatusBar, NativeModules,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,21 +10,17 @@ import { useVaultStore } from '../store/vaultStore';
 import { AppBackground } from '../components/AppBackground';
 import { T } from '../theme/tokens';
 
-// REBUILD REQUIRED after any changes to Native Modules
-// console.warn("[SECUREX] Autofill native module added — rebuild required: npx expo run:android");
-
 export const AutofillSetupScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const { autofillEnabled, checkAutofillStatus } = useVaultStore();
 
   useEffect(() => {
-    // Initial check
     const init = async () => {
       try {
         await checkAutofillStatus();
       } catch (e) {
-        console.error("[SECUREX] Error in checkAutofillStatus init:", e);
+        console.error('[SECUREX] Error in checkAutofillStatus init:', e);
       }
     };
     init();
@@ -35,7 +31,7 @@ export const AutofillSetupScreen: React.FC = () => {
         try {
           await checkAutofillStatus();
         } catch (e) {
-          console.error("[SECUREX] Error re-checking autofill on app active:", e);
+          console.error('[SECUREX] Error re-checking autofill on app active:', e);
         }
       }
     });
@@ -43,11 +39,16 @@ export const AutofillSetupScreen: React.FC = () => {
     return () => subscription.remove();
   }, [checkAutofillStatus]);
 
-  const openSettings = () => {
+  const openSettings = async () => {
     try {
-      Linking.openURL('android.settings.REQUEST_SET_AUTOFILL_SERVICE');
+      if (NativeModules.AutofillModule?.openAutofillSettings) {
+        await NativeModules.AutofillModule.openAutofillSettings();
+        return;
+      }
+      await Linking.openSettings();
     } catch (e) {
-      console.error("[SECUREX] Failed to open Android Autofill settings:", e);
+      console.error('[SECUREX] Failed to open Android Autofill settings:', e);
+      Linking.openSettings().catch(() => {});
     }
   };
 

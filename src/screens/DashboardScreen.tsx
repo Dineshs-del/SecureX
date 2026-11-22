@@ -1,30 +1,66 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useCallback, useRef } from 'react';
 import {
-  View, Text, StyleSheet, SafeAreaView, ScrollView,
-  TouchableOpacity, Animated, Easing, StatusBar,
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  SafeAreaView,
+  StatusBar,
+  Vibration,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { useVaultStore } from '../store/vaultStore';
-import { BottomNav } from '../components/BottomNav';
+import Clipboard from '@react-native-clipboard/clipboard';
+import Svg, { Path, Circle } from 'react-native-svg';
+import { useVaultStore, VaultCredential } from '../store/vaultStore';
+import { MasterPasswordManager } from '../theme/database/MasterPasswordManager';
 import { AppBackground } from '../components/AppBackground';
-import { T } from '../theme/tokens';
+import { GlassView } from '../components/GlassView';
+import { AppHeader } from '../components/AppHeader';
 import { MicroToast, MicroToastHandle } from '../components/MicroToast';
+import { CredentialIcon } from '../components/CredentialIcon';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CryptoService } from '../theme/crypto/CryptoService';
 
-// ── Greeting by time of day ──
-const getGreeting = (): string => {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  return 'Good evening';
-};
+// Vector SVG Icons
+const ChevronRightIcon = ({ size = 18, color = 'rgba(255,255,255,0.40)' }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path d="M9 18l6-6-6-6" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
+
+const DownloadIcon = ({ size = 22, color = '#22d3ee' }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
+
+const KeyIcon = ({ size = 20, color = '#00e5ff' }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path d="M21 2l-2 2m-3 3l2 2m-3-1l2 2m-8.5 2.5a5.5 5.5 0 1 1 7.78-7.78 5.5 5.5 0 0 1-7.78 7.78l-7 7v3h3l1.5-1.5V17h2v-2.5z" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
+
+const BoltIcon = ({ size = 20, color = '#34D399' }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
+
+const PersonIcon = ({ size = 18, color = 'rgba(255,255,255,0.70)' }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    <Circle cx={12} cy={7} r={4} stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
 
 export const DashboardScreen: React.FC = () => {
   const navigation = useNavigation<any>();
-  const { 
-    stats, credentials, loadStats, loadCredentials, 
-    autofillEnabled, checkAutofillStatus 
-  } = useVaultStore();
+  const insets = useSafeAreaInsets();
   const toastRef = useRef<MicroToastHandle>(null);
+  const clipboardTimerRef = useRef<any>(null);
+
+  const { credentials, loadCredentials, stats, loadStats, updateCredential, autofillEnabled, checkAutofillStatus } = useVaultStore();
 
   useFocusEffect(
     useCallback(() => {
@@ -34,323 +70,616 @@ export const DashboardScreen: React.FC = () => {
     }, [loadCredentials, loadStats, checkAutofillStatus])
   );
 
-  // ── Staggered entrance: 60ms per section ──
-  const a0 = useRef(new Animated.Value(0)).current; // header
-  const a1 = useRef(new Animated.Value(0)).current; // vault stats
-  const a2 = useRef(new Animated.Value(0)).current; // quick add
-  const a3 = useRef(new Animated.Value(0)).current; // quick access
-  const a4 = useRef(new Animated.Value(0)).current; // recent
+  const getGreetingLabel = () => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) return 'GOOD MORNING';
+    if (hour >= 12 && hour < 17) return 'GOOD AFTERNOON';
+    return 'GOOD EVENING';
+  };
 
-  useEffect(() => {
-    const f = (a: Animated.Value, d: number) =>
-      Animated.timing(a, { toValue: 1, duration: 440, delay: d, easing: Easing.out(Easing.cubic), useNativeDriver: true });
-    Animated.parallel([f(a0, 0), f(a1, 60), f(a2, 120), f(a3, 180), f(a4, 240)]).start();
-  }, [a0, a1, a2, a3, a4]);
+  // Clipboard copy helper with 30s auto-clear timer and lastAccessed timestamp update
+  const copyToClipboard = async (cred: VaultCredential, field: 'username' | 'password', value: string) => {
+    if (!value) return;
 
-  const ent = (a: Animated.Value) => ({
-    opacity: a,
-    transform: [{ translateY: a.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }],
-  });
+    let textToCopy = value;
+    if (field === 'password') {
+      try {
+        const vKey = MasterPasswordManager.getVaultKey();
+        const decrypted = CryptoService.decryptStringWithKey(value, vKey);
+        if (decrypted) textToCopy = decrypted;
+      } catch {}
+    }
 
-  const total    = stats.total ?? 0;
-  const weak     = stats.weak ?? 0;
-  const breached = stats.breached ?? 0;
-  const strong   = credentials.filter(c => c.strength === 'strong').length;
-  const score    = total > 0 ? Math.round((strong / total) * 100) : 100;
+    Clipboard.setString(textToCopy);
+    Vibration.vibrate(20);
+    toastRef.current?.show(`${field === 'username' ? 'Username' : 'Password'} copied`, 'success');
 
-  // Header accent bar: red if breached > 0, else amber if weak > 0, else green
-  const accentColor = breached > 0 ? T.danger : (weak > 0 ? T.warning : T.success);
+    // Update credential lastAccessed timestamp
+    try {
+      updateCredential(cred.id, { lastAccessed: new Date().toISOString() });
+    } catch {}
 
-  // Recent 3 credentials
-  const recent = [...credentials].sort((a, b) => b.lastAccessed.localeCompare(a.lastAccessed)).slice(0, 3);
+    // Auto-clear clipboard after 30 seconds if content matches
+    if (clipboardTimerRef.current) clearTimeout(clipboardTimerRef.current);
+    clipboardTimerRef.current = setTimeout(async () => {
+      try {
+        const currentClip = await Clipboard.getString();
+        if (currentClip === textToCopy) {
+          Clipboard.setString('');
+        }
+      } catch {}
+    }, 30000);
+  };
+
+  // Health score values
+  const isVaultEmpty = credentials.length === 0;
+  const securityScore = isVaultEmpty ? 100 : (stats.securityScore || 100);
+  const ringColor = securityScore >= 80 ? '#34D399' : securityScore >= 50 ? '#FBBF24' : '#FB7185';
+  const healthStatus = securityScore >= 80 ? 'Looking good.' : 'Action required. Weak credentials found.';
+
+  // SVG Health Progress Ring calculation
+  const ringRadius = 28;
+  const ringCircumference = 2 * Math.PI * ringRadius;
+  const ringOffset = ringCircumference - (securityScore / 100) * ringCircumference;
+
+  // Quick-access core tiles
+  const categoryTiles = [
+    {
+      title: 'Logins & Apps',
+      subtitle: `${credentials.length} ${credentials.length === 1 ? 'login' : 'logins'}`,
+      subtitleColor: 'rgba(255,255,255,0.50)',
+      Icon: KeyIcon,
+      iconColor: '#00e5ff',
+      bgColor: 'rgba(0,229,255,0.12)',
+      onPress: () => navigation.navigate('Vault'),
+    },
+    {
+      title: 'Android Autofill',
+      subtitle: autofillEnabled ? 'Active • Fingerprint' : 'Tap to enable',
+      subtitleColor: autofillEnabled ? '#34D399' : '#FBBF24',
+      Icon: BoltIcon,
+      iconColor: autofillEnabled ? '#34D399' : '#FBBF24',
+      bgColor: autofillEnabled ? 'rgba(52,211,153,0.14)' : 'rgba(251,191,36,0.14)',
+      onPress: () => navigation.navigate('AutofillSetup'),
+    },
+  ];
+
+  const recentLogins = credentials.slice(0, 3);
 
   return (
     <SafeAreaView style={s.container}>
-      <StatusBar barStyle="light-content" backgroundColor={T.bg} />
+      <StatusBar barStyle="light-content" backgroundColor="#080c10" />
       <AppBackground />
+      <MicroToast ref={toastRef} />
 
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={s.scrollView}
+        contentContainerStyle={[s.scrollContent, { paddingBottom: 110 + insets.bottom }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* AppHeader */}
+        <AppHeader
+          greeting={getGreetingLabel()}
+          title="SecureX Vault"
+        />
 
-        {/* ── 1. HEADER ── */}
-        <Animated.View style={[s.section, ent(a0)]}>
-          <Text style={s.brand}>SECUREX</Text>
-          <Text style={s.greeting}>{getGreeting()} 👋</Text>
-        </Animated.View>
-
-        {/* ── 2. VAULT STATS CARD ── */}
-        <Animated.View style={[ent(a1)]}>
-          <View style={s.card}>
-            <View style={s.cardTopHL} />
-            {/* Left accent bar */}
-            <View style={[s.accentBar, { backgroundColor: accentColor }]} />
-
-            <View style={s.statsHeader}>
-              <Text style={s.statsLabel}>VAULT OVERVIEW</Text>
-              <Text style={s.shieldIcon}>🛡️</Text>
-            </View>
-
-            <View style={s.statsRow}>
-              <View style={s.statCol}>
-                <Text style={[s.statNum, s.statNumGlow]}>{score}%</Text>
-                <Text style={s.statName}>Score</Text>
+        {/* Vault Security Health Card */}
+        <TouchableOpacity
+          activeOpacity={0.88}
+          onPress={() => navigation.navigate('Security')}
+          accessibilityLabel="Vault Security Health"
+          accessibilityRole="button"
+        >
+          <GlassView style={s.healthCard} borderRadius={28}>
+            <View style={s.healthTopRow}>
+              {/* Ring Progress */}
+              <View style={s.ringWrapper}>
+                <Svg width={68} height={68} viewBox="0 0 68 68">
+                  <Circle
+                    cx={34}
+                    cy={34}
+                    r={ringRadius}
+                    stroke="rgba(255,255,255,0.12)"
+                    strokeWidth={5}
+                    fill="none"
+                  />
+                  <Circle
+                    cx={34}
+                    cy={34}
+                    r={ringRadius}
+                    stroke={ringColor}
+                    strokeWidth={5}
+                    strokeDasharray={`${ringCircumference} ${ringCircumference}`}
+                    strokeDashoffset={ringOffset}
+                    strokeLinecap="round"
+                    fill="none"
+                    transform="rotate(-90 34 34)"
+                  />
+                </Svg>
+                <View style={s.ringTextContainer}>
+                  <Text style={s.ringPercentText} maxFontSizeMultiplier={1.3}>
+                    {securityScore}%
+                  </Text>
+                </View>
               </View>
-              <View style={s.statDivider} />
-              <View style={s.statCol}>
-                <Text style={[s.statNum, weak > 0 && { color: T.warning, textShadowColor: 'rgba(255,166,35,0.35)', textShadowRadius: 8 }]}>{total}</Text>
-                <Text style={s.statName}>Total</Text>
-              </View>
-              <View style={s.statDivider} />
-              <View style={s.statCol}>
-                <Text style={[s.statNum, breached > 0 && { color: T.danger, textShadowColor: 'rgba(255,51,102,0.35)', textShadowRadius: 10 }]}>{breached}</Text>
-                <Text style={s.statName}>Breached</Text>
-              </View>
-            </View>
-          </View>
-        </Animated.View>
 
-        {/* ── 3. QUICK ADD SHORTCUT ── */}
-        <Animated.View style={[ent(a2)]}>
-          <TouchableOpacity
-            style={s.quickAddCard}
-            activeOpacity={0.85}
-            onPress={() => navigation.navigate('AddCredential')}
-          >
-            <View style={s.cardTopHL} />
-            <View style={s.quickAddIcon}>
-              <Text style={{ fontSize: 20, color: T.cyan }}>+</Text>
-            </View>
-            <View style={s.quickAddText}>
-              <Text style={s.quickAddTitle}>Add Credential</Text>
-              <Text style={s.quickAddSub}>Save a new password</Text>
-            </View>
-            <Text style={s.quickAddArrow}>→</Text>
-          </TouchableOpacity>
-        </Animated.View>
-
-        {/* ── 4. QUICK ACCESS ── */}
-        <Animated.View style={[ent(a3)]}>
-          <Text style={s.sectionLabel}>Quick Access</Text>
-          <View style={s.quickGrid}>
-            {/* Password Generator */}
-            <TouchableOpacity
-              style={[s.quickCard, { flex: 1, marginRight: 5 }]}
-              activeOpacity={0.85}
-              onPress={() => navigation.navigate('AIPasswordGenerator')}
-            >
-              <View style={s.cardTopHL} />
-              <View style={[s.qIcon, { backgroundColor: T.purpleA14 }]}>
-                <Text style={s.qEmoji}>✨</Text>
-              </View>
-              <Text style={s.qTitle}>Password Generator</Text>
-              <Text style={s.qDesc}>Create strong passwords</Text>
-              <View style={s.qPill}>
-                <Text style={s.qPillText}>Generate</Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Autofill */}
-            <TouchableOpacity
-              style={[s.quickCard, { flex: 1, marginLeft: 5 }]}
-              activeOpacity={0.85}
-              onPress={() => navigation.navigate('AutofillSetup')}
-            >
-              <View style={s.cardTopHL} />
-              <View style={[s.qIcon, { backgroundColor: autofillEnabled ? 'rgba(6,214,160,0.14)' : T.warningA14 }]}>
-                <Text style={s.qEmoji}>⚡</Text>
-              </View>
-              <Text style={s.qTitle}>Autofill Setup</Text>
-              <Text style={[s.qDesc, autofillEnabled && { color: '#06d6a0', fontWeight: '600' }]}>
-                {autofillEnabled ? 'Autofill is active ✓' : 'Enable quick login'}
-              </Text>
-              <View style={[
-                s.qPill, 
-                autofillEnabled 
-                   ? { borderColor: 'rgba(6,214,160,0.25)', backgroundColor: 'rgba(6,214,160,0.06)' }
-                   : { borderColor: 'rgba(245,166,35,0.25)', backgroundColor: 'rgba(245,166,35,0.06)' }
-              ]}>
-                <Text style={[s.qPillText, { color: autofillEnabled ? '#06d6a0' : T.warning }]}>
-                  {autofillEnabled ? 'Active' : 'Set up'}
+              {/* Status Info */}
+              <View style={s.healthTextContainer}>
+                <Text style={s.healthCardTitle} maxFontSizeMultiplier={1.3}>
+                  Vault Security Health
+                </Text>
+                <Text style={s.healthStatusSub} numberOfLines={1} maxFontSizeMultiplier={1.3}>
+                  {healthStatus}
                 </Text>
               </View>
+
+              <ChevronRightIcon size={18} color="rgba(255,255,255,0.40)" />
+            </View>
+
+            {/* Inner Stats Panel */}
+            <View style={s.healthInnerPanel}>
+              <View style={s.statCol}>
+                <Text style={s.statValWhite}>{stats.total || credentials.length}</Text>
+                <Text style={s.statLbl}>Total items</Text>
+              </View>
+
+              <View style={s.statHairline} />
+
+              <View style={s.statCol}>
+                <Text style={s.statValAmber}>{stats.weak || 0}</Text>
+                <Text style={s.statLbl}>Weak</Text>
+              </View>
+
+              <View style={s.statHairline} />
+
+              <View style={s.statCol}>
+                <Text style={s.statValRed}>{stats.breached || 0}</Text>
+                <Text style={s.statLbl}>Breached</Text>
+              </View>
+            </View>
+          </GlassView>
+        </TouchableOpacity>
+
+        {/* Import Banner */}
+        <TouchableOpacity
+          activeOpacity={0.88}
+          onPress={() => navigation.navigate('ImportExport')}
+          accessibilityLabel="Import passwords"
+          accessibilityRole="button"
+        >
+          <GlassView style={s.importCard} borderRadius={24}>
+            <View style={s.importIconTile}>
+              <DownloadIcon size={22} color="#22d3ee" />
+            </View>
+
+            <View style={s.importTextContainer}>
+              <Text style={s.importTitle} maxFontSizeMultiplier={1.3}>
+                Import your passwords
+              </Text>
+              <Text style={s.importSub} numberOfLines={1} maxFontSizeMultiplier={1.3}>
+                Chrome, Bitwarden, 1Password or a file
+              </Text>
+            </View>
+
+            <ChevronRightIcon size={18} color="rgba(34,211,238,0.70)" />
+          </GlassView>
+        </TouchableOpacity>
+
+        {/* Vault Categories Grid */}
+        <View style={s.sectionHeaderContainer}>
+          <Text style={s.sectionLabel} maxFontSizeMultiplier={1.3}>
+            VAULT CATEGORIES
+          </Text>
+        </View>
+
+        <View style={s.categoryGrid}>
+          {categoryTiles.map((tile) => {
+            const TileIcon = tile.Icon;
+            return (
+              <TouchableOpacity
+                key={tile.title}
+                style={s.gridCol}
+                activeOpacity={0.85}
+                onPress={tile.onPress}
+                accessibilityLabel={`${tile.title}, ${tile.subtitle}`}
+                accessibilityRole="button"
+              >
+                <GlassView style={s.categoryCard} borderRadius={22}>
+                  <View style={[s.categoryIconTile, { backgroundColor: tile.bgColor }]}>
+                    <TileIcon size={20} color={tile.iconColor} />
+                  </View>
+                  <Text style={s.categoryTitle} numberOfLines={1} maxFontSizeMultiplier={1.3}>
+                    {tile.title}
+                  </Text>
+                  <Text style={[s.categoryCount, { color: tile.subtitleColor }]} maxFontSizeMultiplier={1.3}>
+                    {tile.subtitle}
+                  </Text>
+                </GlassView>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Recent Credentials List */}
+        <View style={s.sectionHeaderRow}>
+          <Text style={s.sectionLabel} maxFontSizeMultiplier={1.3}>
+            RECENT CREDENTIALS
+          </Text>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate('Vault')}
+            accessibilityLabel={`View all ${credentials.length} items`}
+            accessibilityRole="button"
+          >
+            <Text style={s.viewAllText} maxFontSizeMultiplier={1.3}>
+              View all ({credentials.length})
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {recentLogins.length > 0 ? (
+          <GlassView style={s.recentGroupCard} borderRadius={24}>
+            {recentLogins.map((cred, idx) => (
+              <View key={cred.id}>
+                {idx > 0 ? <View style={s.rowSeparator} /> : null}
+                <TouchableOpacity
+                  style={s.recentRow}
+                  activeOpacity={0.75}
+                  onPress={() => navigation.navigate('CredentialDetail', { id: cred.id })}
+                  accessibilityLabel={`Credential ${cred.name}`}
+                  accessibilityRole="button"
+                >
+                  <View style={s.recentIconWrapper}>
+                    <CredentialIcon name={cred.name} size={46} />
+                  </View>
+
+                  <View style={s.recentInfo}>
+                    <Text style={s.recentName} numberOfLines={1} maxFontSizeMultiplier={1.3}>
+                      {cred.name}
+                    </Text>
+                    <Text style={s.recentUsername} numberOfLines={1} maxFontSizeMultiplier={1.3}>
+                      {cred.username || 'No username'}
+                    </Text>
+                  </View>
+
+                  <View style={s.actionButtonsGroup}>
+                    {/* Copy Username */}
+                    <TouchableOpacity
+                      style={s.roundGlassActionBtn}
+                      activeOpacity={0.7}
+                      onPress={() => copyToClipboard(cred, 'username', cred.username)}
+                      accessibilityLabel="Copy username"
+                      accessibilityRole="button"
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <PersonIcon size={18} color="rgba(255,255,255,0.70)" />
+                    </TouchableOpacity>
+
+                    {/* Copy Password */}
+                    <TouchableOpacity
+                      style={[s.roundGlassActionBtn, s.cyanTintActionBtn]}
+                      activeOpacity={0.7}
+                      onPress={() => copyToClipboard(cred, 'password', cred.password)}
+                      accessibilityLabel="Copy password"
+                      accessibilityRole="button"
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <KeyIcon size={18} color="#00e5ff" />
+                    </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </GlassView>
+        ) : (
+          <GlassView style={s.emptyStateCard} borderRadius={24}>
+            <Text style={s.emptyTitle} maxFontSizeMultiplier={1.3}>
+              Your vault is empty
+            </Text>
+            <Text style={s.emptySub} maxFontSizeMultiplier={1.3}>
+              Add your first login account to enable instant 1-tap autofill.
+            </Text>
+            <TouchableOpacity
+              style={s.emptyAddBtn}
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('AddCredential', { category: 'Web' })}
+              accessibilityLabel="Add your first login"
+              accessibilityRole="button"
+            >
+              <Text style={s.emptyAddBtnText} maxFontSizeMultiplier={1.3}>
+                Add your first login
+              </Text>
             </TouchableOpacity>
-          </View>
-        </Animated.View>
-
-        {/* ── 5. RECENT ACTIVITY ── */}
-        <Animated.View style={[ent(a4)]}>
-          <Text style={s.sectionLabel}>Recent Activity</Text>
-          <View style={s.recentCard}>
-            <View style={s.cardTopHL} />
-            {recent.length === 0 ? (
-              <Text style={s.recentEmpty}>No recent activity yet</Text>
-            ) : (
-              recent.map((cred, i) => {
-                const initial = (cred.name || '?').charAt(0).toUpperCase();
-                const isLast = i === recent.length - 1;
-                return (
-                  <TouchableOpacity 
-                    key={cred.id} 
-                    style={[s.recentRow, !isLast && s.recentRowBorder]}
-                    onPress={() => navigation.navigate('CredentialDetail', { id: cred.id })}
-                  >
-                    <View style={s.recentAvatar}>
-                      <Text style={s.recentAvatarText}>{initial}</Text>
-                    </View>
-                    <View style={s.recentInfo}>
-                      <Text style={s.recentName} numberOfLines={1}>{cred.name}</Text>
-                      <Text style={s.recentSub}>Saved credential</Text>
-                    </View>
-                    <Text style={s.recentLock}>🔒</Text>
-                  </TouchableOpacity>
-                );
-              })
-            )}
-          </View>
-        </Animated.View>
-
+          </GlassView>
+        )}
       </ScrollView>
-      <BottomNav activeTab="Home" />
-      <MicroToast ref={toastRef} />
+
+
     </SafeAreaView>
   );
 };
 
-// ─── Styles ─────────────────────────────────────────────
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: T.bg },
-
-  scroll: { paddingTop: 50, paddingBottom: 110 },
-  section: { paddingHorizontal: T.pad, marginBottom: 20 },
-
-  // Header
-  brand: {
-    ...T.fontLabel, color: T.muted, marginBottom: 10,
+  container: {
+    flex: 1,
+    backgroundColor: '#080c10',
   },
-  greeting: { ...T.fontHero },
-
-  // Section label
-  sectionLabel: {
-    ...T.fontLabel, color: T.muted,
-    paddingHorizontal: T.pad, marginBottom: T.sectionGap,
+  scrollView: {
+    flex: 1,
   },
-
-  // ── Glass Card base ──
-  card: {
-    marginHorizontal: T.pad, marginBottom: T.gap,
-    backgroundColor: T.glass, borderRadius: T.rCard,
-    padding: T.cardPadH,
-    borderWidth: 1, borderColor: T.border,
-    overflow: 'hidden',
-    ...T.shadowCard,
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 52,
+    paddingBottom: 110,
+    gap: 16,
   },
-  cardTopHL: {
-    position: 'absolute', top: 0, left: 0, right: 0,
-    height: 1, backgroundColor: T.borderTop,
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
   },
-
-  // Accent bar (left side)
-  accentBar: {
-    position: 'absolute', left: 0, top: 12, bottom: 12,
-    width: 3, borderRadius: 2,
+  subHeaderLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.42)',
+    letterSpacing: 1.4,
+    marginBottom: 2,
   },
-
-  // ── Vault Stats ──
-  statsHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    marginBottom: 14, paddingLeft: 8,
+  headerTitle: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.9,
   },
-  statsLabel: { ...T.fontLabel, fontSize: 10, color: T.muted },
-  shieldIcon: { fontSize: 18, opacity: 0.7 },
-
-  statsRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingLeft: 8,
+  lockButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  statCol: { flex: 1, alignItems: 'center' },
-  statNum: { fontSize: 26, fontWeight: '800', color: T.white, letterSpacing: -0.5 },
-  statNumGlow: { textShadowColor: 'rgba(255,255,255,0.2)', textShadowRadius: 8 },
-  statName: { ...T.fontCaption, color: T.muted, marginTop: 4 },
-  statDivider: { width: 1, height: 36, backgroundColor: T.border },
-
-  // ── Quick Add ──
-  quickAddCard: {
-    marginHorizontal: T.pad, marginBottom: T.gap,
-    backgroundColor: T.glass, borderRadius: T.rCard,
-    paddingVertical: T.cardPadV, paddingHorizontal: T.cardPadH,
-    borderWidth: 1, borderColor: T.border,
-    flexDirection: 'row', alignItems: 'center',
-    overflow: 'hidden',
-    ...T.shadowCard,
+  healthCard: {
+    padding: 18,
   },
-  quickAddIcon: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: T.cyanA12,
-    alignItems: 'center', justifyContent: 'center',
+  healthTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  ringWrapper: {
+    width: 68,
+    height: 68,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 14,
-    shadowColor: T.cyan, shadowOpacity: 0.3, shadowRadius: 10,
-    shadowOffset: { width: 0, height: 0 }, elevation: 6,
   },
-  quickAddText: { flex: 1 },
-  quickAddTitle: { ...T.fontBody, fontWeight: '700' },
-  quickAddSub: { ...T.fontCaption, color: T.muted, marginTop: 2 },
-  quickAddArrow: { fontSize: 20, fontWeight: '700', color: T.cyan },
-
-  // ── Quick Access grid ──
-  quickGrid: {
-    flexDirection: 'row', paddingHorizontal: T.pad,
-    marginBottom: T.gap,
+  ringTextContainer: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  quickCard: {
-    backgroundColor: T.glass, borderRadius: T.rCard,
-    padding: T.cardPadV, borderWidth: 1, borderColor: T.border,
-    overflow: 'hidden',
-    ...T.shadowCard,
+  ringPercentText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
-  qIcon: {
-    width: 44, height: 44, borderRadius: 22,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 12,
+  healthTextContainer: {
+    flex: 1,
   },
-  qEmoji: { fontSize: 20 },
-  qTitle: { ...T.fontBody, fontWeight: '700', fontSize: 14, marginBottom: 4 },
-  qDesc: { ...T.fontCaption, color: T.muted, marginBottom: 14 },
-  qPill: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 14, paddingVertical: 6,
-    borderRadius: T.rPill,
-    borderWidth: 1, borderColor: T.cyanA18,
-    backgroundColor: T.cyanA04,
+  healthCardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 2,
   },
-  qPillText: { ...T.fontCaption, color: T.cyan, fontWeight: '700', fontSize: 11 },
-
-  // ── Recent Activity ──
-  recentCard: {
-    marginHorizontal: T.pad,
-    backgroundColor: T.glass, borderRadius: T.rCard,
-    paddingVertical: 6, paddingHorizontal: T.cardPadH,
-    borderWidth: 1, borderColor: T.border,
-    overflow: 'hidden',
-    ...T.shadowCard,
+  healthStatusSub: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.60)',
   },
-  recentEmpty: {
-    ...T.fontCaption, color: T.muted, textAlign: 'center',
-    paddingVertical: 24,
+  healthInnerPanel: {
+    backgroundColor: 'rgba(10,14,19,0.38)',
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  statCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statValWhite: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  statValAmber: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FBBF24',
+    marginBottom: 2,
+  },
+  statValRed: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FB7185',
+    marginBottom: 2,
+  },
+  statLbl: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.42)',
+  },
+  statHairline: {
+    width: 1,
+    height: 24,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+  },
+  importCard: {
+    padding: 14,
+    backgroundColor: 'rgba(34,211,238,0.09)',
+    borderColor: 'rgba(103,232,249,0.35)',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  importIconTile: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: 'rgba(34,211,238,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  importTextContainer: {
+    flex: 1,
+  },
+  importTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  importSub: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.60)',
+  },
+  sectionHeaderContainer: {
+    marginTop: 4,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.42)',
+    letterSpacing: 1.2,
+  },
+  viewAllText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#00e5ff',
+  },
+  categoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  gridCol: {
+    width: '48.5%',
+  },
+  categoryCard: {
+    padding: 14,
+  },
+  categoryIconTile: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  categoryTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  categoryCount: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.50)',
+  },
+  recentGroupCard: {
+    padding: 6,
   },
   recentRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
   },
-  recentRowBorder: {
-    borderBottomWidth: 1, borderBottomColor: T.border,
+  rowSeparator: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    marginHorizontal: 12,
   },
-  recentAvatar: {
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: T.cyanA12,
-    alignItems: 'center', justifyContent: 'center',
+  recentIconWrapper: {
     marginRight: 12,
   },
-  recentAvatarText: { fontSize: 13, fontWeight: '800', color: T.cyan },
-  recentInfo: { flex: 1 },
-  recentName: { ...T.fontBody, fontWeight: '700', fontSize: 14 },
-  recentSub: { ...T.fontCaption, color: T.muted, marginTop: 2 },
-  recentLock: { fontSize: 14, opacity: 0.4 },
+  recentInfo: {
+    flex: 1,
+    marginRight: 8,
+  },
+  recentName: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  recentUsername: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.50)',
+  },
+  actionButtonsGroup: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  roundGlassActionBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cyanTintActionBtn: {
+    backgroundColor: 'rgba(0,229,255,0.12)',
+    borderColor: 'rgba(0,229,255,0.30)',
+  },
+  emptyStateCard: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  emptySub: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.50)',
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  emptyAddBtn: {
+    height: 48,
+    paddingHorizontal: 20,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyAddBtnText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#080c10',
+  },
 });

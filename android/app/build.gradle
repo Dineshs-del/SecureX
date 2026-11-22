@@ -50,6 +50,7 @@ android {
 
 dependencies {
     implementation("com.facebook.react:react-android")
+    implementation("androidx.biometric:biometric:1.1.0")
 
     def isHermesEnabled = project.ext.has("hermesEnabled") ? project.ext.get("hermesEnabled").toBoolean() : true
     if (isHermesEnabled) {
